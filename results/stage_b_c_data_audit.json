@@ -1,0 +1,57 @@
+{
+  "pg19_stats": {
+    "total_books": 5276,
+    "train_books": 5176,
+    "val_books": 100,
+    "mean_tokens": 145437.2,
+    "median_tokens": 105849.0,
+    "share_books_ge_8k": 97.0,
+    "share_tokens_ge_8k": 99.91,
+    "share_books_ge_32k": 87.8,
+    "share_tokens_ge_32k": 98.42,
+    "train_tokens": 672238526,
+    "val_tokens": 15178124,
+    "elapsed_sec": 203.4
+  },
+  "fineweb_edu_long_stats": {
+    "scanned_docs": 1455000,
+    "long_docs": 24842,
+    "train_tokens": 369645449,
+    "val_tokens": 20550554,
+    "elapsed_sec": 120.2
+  },
+  "stage_b_repetition": {
+    "wikipedia_long_35pct": {
+      "tokens_needed": 87500000,
+      "tokens_available": 212430994,
+      "repetition_factor": 0.4119
+    },
+    "fineweb_edu_long_25pct": {
+      "tokens_needed": 62500000,
+      "tokens_available": 369645449,
+      "repetition_factor": 0.1691
+    },
+    "pg19_books_15pct": {
+      "tokens_needed": 37500000,
+      "tokens_available": 672238526,
+      "repetition_factor": 0.0558
+    },
+    "short_replay_25pct": {
+      "tokens_needed": 62500000,
+      "tokens_available": 4335097485,
+      "repetition_factor": 0.0144
+    }
+  },
+  "stage_c_repetition": {
+    "pg19_books_75pct": {
+      "tokens_needed": 86000000,
+      "tokens_available": 661617157,
+      "repetition_factor": 0.13
+    },
+    "short_replay_25pct": {
+      "tokens_needed": 28700000,
+      "tokens_available": 4335097485,
+      "repetition_factor": 0.0066
+    }
+  }
+}

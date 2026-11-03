@@ -80,15 +80,19 @@ Principle: for small models, **data quality and data fit matter more than volume
 | **TinyStories** | `roneneldan/TinyStories` | CDLA-Permissive-1.0 | Short (mean 208 tok, max 988) | Coherent simple reasoning for tiny models |
 | **Cosmopedia v2** | `HuggingFaceTB/cosmopedia-v2` | Apache 2.0 | Medium (mean 720 tok, max 1.8k) | Dense synthetic textbooks and stories |
 | **FineWeb-Edu** | `HuggingFaceFW/fineweb-edu` | ODC-By 1.0 | Varied (mean 1.1k tok, max 26.9k) | Educational filtered web text |
-| **Wikipedia (en)** | `wikimedia/wikipedia` | CC BY-SA 3.0 / 4.0 | Medium-Long (mean 852.2 tok, 5.46B tok total, 1.77% docs $\ge 8\text{k}$) | Factual reference; neutral evaluation set (~10M tokens) |
-| **PG-19 (Books)** | `emozilla/pg19` | Public Domain / CC0 | Very Long (mean 107.2k tok, 3.08B tok total, 80.3% docs $\ge 32\text{k}$) | Primary source for genuine $\ge 8\text{k}$ and $\ge 32\text{k}$ long context |
+| **Wikipedia (en)** | `wikimedia/wikipedia` | CC BY-SA 3.0 / 4.0 | Medium-Long (mean 852.2 tok, 5.46B tok total, 1.77% docs $\ge 8\text{k}$) | Factual reference; neutral evaluation set (~10M tokens); long articles $\ge 8\text{k}$ for Stage B |
+| **FineWeb-Edu ($\ge 8\text{k}$)** | `HuggingFaceFW/fineweb-edu` | ODC-By 1.0 | Long (mean 14.8k tok, ~400M tokens $\ge 8\text{k}$) | Carved directly from training shards for Stage B 25% share (62.5M tokens needed vs ~385M available) |
+| **PG-19 (Books)** | `emozilla/pg19` | Public Domain / CC0 | Very Long (mean 145.4k tok, 97.0% books $\ge 8\text{k}$, 87.8% books $\ge 32\text{k}$) | Primary source for genuine $\ge 8\text{k}$ and $\ge 32\text{k}$ long context (5,276 books locally, 100 held out for val) |
 
 *Note: arXiv (`ccdv/arxiv-summarization`) was audited and dropped from training due to placeholder contamination (`@xmath`, `@xcite`) and licensing ambiguity.*
 
 ### Processing & Holdouts
 1. **Holdouts taken by document before tokenizing**: Hold out a fixed 5% validation set per source by document. Never mix train and val.
-2. **Neutral reference set**: 10M tokens held out from Wikipedia shard 40, reserved as a neutral evaluation corpus neither model sees during Phase 5 data ablation, audited for 13-gram non-contamination.
-3. **Long-document evaluation set**: Dedicated held-out pool of 170+ books and long articles $\ge 32\text{k}$ tokens from PG-19 and Wikipedia for token-position bucket perplexity and needle retrieval.
+2. **Neutral reference set**: 10M tokens held out from Wikipedia shard 40, reserved as a neutral evaluation corpus neither model sees during Phase 5 data ablation, audited for 13-gram non-contamination (< 0.01% matches).
+3. **Long-document evaluation sets**:
+   - PG-19: Dedicated held-out pool of exactly 100 books (`val_pg19_long.bin`, ~15.2M tokens) for token-position bucket perplexity and passkey retrieval at 8k and 32k.
+   - Wikipedia Long: 1,086 held-out long articles (`val_wikipedia_long.bin`, ~9.8M tokens).
+   - FineWeb-Edu Long: 5% held-out slice of documents $\ge 8\text{k}$ (`val_fineweb_edu_long.bin`, ~20M tokens).
 4. **Tokenization**: Memmapped `uint16` binary shards (`.bin`) with EOS between documents.
 
 **Deliverable:** `results/length_distribution.csv`, `data/` tokenized shards, `data/manifest.json`.
@@ -156,33 +160,58 @@ def plan(tok_per_sec_measured, hours, params):
     return tokens, tokens / params     # total tokens, tokens-per-parameter
 ```
 
-### 1-Hour Finalist Comparison Trials (Short Context, 2k)
-Before committing to the full multi-stage training run:
-1. Train all 4 trial models (Finalist 1, Finalist 2, Finalist 3, and Control) on identical approved dataset mix, identical 8k tokenizer, and equal wall-clock time (~1 hour each at 2,048 context).
-2. **Terminal Decay in Trials**: To ensure fair evaluation, each 1-hour trial spends the first 90% of its budget in the stable phase and executes a short 10% terminal decay down to $0.1\times \eta_0$ so final validation losses reflect converged models.
-3. Evaluate held-out validation loss across sources and compare 1-KV vs. 2-KV quality gap.
-4. Plot held-out validation loss vs. decode speed (at 0 and 32k depth).
-5. Review results with the user to select the single winning architecture for the full staged run.
+## Phase 5: 1-Hour Finalist Trials & Data Mixture Ablation
 
-**Deliverable:** `results/train_throughput.csv`, 1-hour trial comparison curves, speed vs. val loss Pareto plot, finalist decision note.
+Phase 5 is divided into two sequential steps:
+1. **Phase 5A: Architecture Selection Trials** — train all 4 candidate shapes on the default Stage A mix to select the winning architecture.
+2. **Phase 5B: Data Mixture Ablation** — on the approved winning architecture, evaluate synthetic vs. web text to determine the optimal Stage A data blend.
 
 ---
 
-## Phase 5: Data mixture ablation (Plain CE on Web Text vs. Teacher-Generated Synthetic)
+### Phase 5A: Architecture Selection Trials (4 Shapes × 1 Hour at 2k Context)
+Before committing to the full staged training run:
+1. **Four Architectures Evaluated**:
+   - Finalist 1: `4L_768H_1KV` (30.28M params)
+   - Finalist 2: `6L_512H_1KV` (19.54M params)
+   - Finalist 3: `6L_768H_1KV` (42.28M params)
+   - Control: `4L_768H_2KV` (30.68M params)
+2. **Standardized Setup**:
+   - Context length: 2,048 tokens.
+   - Dataset mix: Default Stage A foundation mix (45% Cosmopedia v2, 45% FineWeb-Edu, 10% TinyStories).
+   - Tokenizer: Custom 8,192 SentencePiece BPE.
+   - Learning rate: Optimal peak $\eta_0$ determined by the extended LR sweep on the Stage A mix.
+   - Global batch: 32 sequences (65,536 tokens, micro-batch 8, 4 grad accum steps).
+3. **Training & Terminal Decay Protocol**:
+   - Each trial trains for exactly 1 hour wall-clock.
+   - Follows WSD with 10% terminal cosine decay down to $0.1\times \eta_0$ (first 54 minutes flat in the stable phase, final 6 minutes cosine decay to $0.1\times \eta_0$) so final validation losses reflect fully converged models.
+4. **Two-Way Fair Evaluation Protocol**:
+   - **Equal Wall-Clock (1 Hour)**: Evaluates quality achievable within fixed compute time, properly accounting for training speed differences (`6L_512H_1KV` sees ~364M tokens/hr vs. `6L_768H_1KV` seeing ~224M tokens/hr).
+   - **Equal Tokens Seen (Iso-Token Checkpoint)**: Evaluates parameter efficiency at identical data exposure (checkpointed at 220M tokens, the volume reached by the slowest finalist).
+5. **Quality vs. Speed Pareto Plots**:
+   - Plot held-out validation loss against single-stream decode speed at 0 context depth.
+   - Plot held-out validation loss against single-stream decode speed at 32k context depth.
+   - Compare `4L_768H_1KV` vs. `4L_768H_2KV` validation loss to quantify the exact quality penalty of 1 KV head vs. 2 KV heads.
+6. **Checkpoint & Pause**: Present the comparison table, curves, and Pareto plots for user review and approval to pick the single winning architecture.
 
+**Deliverable:** `results/trials_1hr_summary.csv`, 1-hour trial comparison curves, speed vs. val loss Pareto plots (0 and 32k depth), finalist architecture decision note.
+
+---
+
+### Phase 5B: Data Mixture Ablation (on Approved Winning Architecture)
 **Question to answer:** Does training on teacher-generated synthetic data (Cosmopedia v2) beat plain CE on human web text (FineWeb-Edu) under equal wall-clock time, and what is the optimal blend?
 
-Train the chosen winning finalist shape under equal wall-clock budget (1–2 hours):
+Train the winning shape chosen in Phase 5A under equal 1-hour wall-clock runs:
 - **Run A: Human web text** (`FineWeb-Edu`).
 - **Run B: Synthetic educational text** (`Cosmopedia v2`).
+- **Run C: Balanced blend** (45% Cosmopedia v2, 45% FineWeb-Edu, 10% TinyStories).
 
-### Apples-to-Apples Evaluation Protocol
-To avoid in-distribution evaluation bias (where each model predictably wins on its own training distribution):
-1. **Neutral Common Reference Set**: Evaluate both runs on a 10M-token held-out dataset that **neither model trained on** (English Wikipedia held-out split, verified for zero contamination).
+#### Apples-to-Apples Evaluation Protocol
+To eliminate in-distribution bias (where each model predictably wins on its own training distribution):
+1. **Neutral Common Reference Set**: Evaluate all runs on the 10M-token held-out dataset that **none of the models trained on** (English Wikipedia held-out split from shard 40, audited for < 0.01% 13-gram non-contamination).
 2. **Cross-Distribution Evaluation**: Evaluate Run A on held-out Cosmopedia, and Run B on held-out FineWeb-Edu.
-3. **Qualitative Evaluation**: Compare greedy and sampled generations on 20 fixed prompts assessing coherence, factual consistency, and reasoning.
+3. **Qualitative Generation**: Compare greedy and sampled generations on 20 fixed prompts assessing coherence, factual consistency, and reasoning.
 
-**Decision Rule:** Determine whether pure synthetic, pure web, or an interpolated blend (e.g. 60/40 or 70/30 synthetic/web) achieves the lowest perplexity on the neutral reference set. The winning distribution ratio sets the data blend for Stage A pretraining.
+**Decision Rule:** Determine whether pure synthetic, pure web, or an interpolated blend achieves the lowest perplexity on the neutral reference set. The winning distribution ratio sets the data blend for Stage A pretraining.
 
 **Deliverable:** `results/distill_ablation.csv`, loss curves on neutral reference set, cross-distribution loss table, generation samples, mixture ratio verdict.
 
@@ -250,9 +279,22 @@ The training capacity on the RTX 3070 Ti is planned around 3.2B tokens:
    - **Dynamic Extension Rule**: If 32k passkey retrieval is below 80% or loss slope is still decreasing steeply at sequence 1,750, draw up to 2,000 additional sequences (+500 optimizer steps, +65.5M tokens) from the 300M reserve budget before initiating the terminal anneal.
    - **Sub-stage C2 (Final 1,750 Sequences) - Quality Anneal**: LR decays smoothly via cosine schedule down to **$0.1\times \eta_0$**, while shifting the mixture toward the highest-quality educational and long-form data.
 
-### Long-Document Data Strategy
-- FineWeb-Edu and Wikipedia have **0 documents ≥ 32k tokens**. PG-19 is the verified large public-domain corpus with continuous documents ≥ 32k tokens (**2.95B tokens ≥ 32k** across 28,752 books).
+### Long-Document Data Strategy & Repetition Audit
+- FineWeb-Edu and Wikipedia have **0 documents ≥ 32k tokens**. PG-19 is the verified large public-domain corpus with continuous documents ≥ 32k tokens (**2.95B tokens ≥ 32k** across 28,752 books in full corpus; **661.6M tokens ≥ 32k** across the 5,176 books in our local expanded training shard).
 - **No document packing without disclosure**: Do not pack unrelated short documents together as a substitute for long context without explicitly reporting it. For Stage C, 3,500 continuous sequences of 32k tokens require ~114.7M tokens, which is comfortably supplied by PG-19 books without packing.
+
+#### Repetition Rate Audit Across Staged Extensions
+All sources across Stages B and C exhibit repetition factors strictly below 0.42x, confirming **zero data repetition (all tokens 100% unique)** across the entire extension curriculum:
+
+| Extension Stage & Source | Share | Tokens Needed | Available Tokens in Shards | Repetition Factor (Needed / Available) | Verdict |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Stage B: Wikipedia Long ($\ge 8\text{k}$)** | 35% | 87.5M | 212.4M (`train_wikipedia_long.bin`) | **0.412x** | Zero Repetition (41.2% seen once) |
+| **Stage B: FineWeb-Edu Long ($\ge 8\text{k}$)** | 25% | 62.5M | 369.6M (`train_fineweb_edu_long.bin`) | **0.169x** | Zero Repetition (16.9% seen once) |
+| **Stage B: PG-19 Books ($\ge 8\text{k}$)** | 15% | 37.5M | 672.2M (`train_pg19_long.bin`) | **0.056x** | Zero Repetition (5.6% seen once) |
+| **Stage B: Short Replay (2k)** | 25% | 62.5M | 4,335.1M (`train_cosmopedia` + `fineweb`) | **0.014x** | Zero Repetition (1.4% seen once) |
+| **Stage C: PG-19 Books ($\ge 32\text{k}$)** | 75% | 86.0M | 661.6M (PG-19 books $\ge 32\text{k}$) | **0.130x** | Zero Repetition (13.0% seen once) |
+| **Stage C: Short Replay (2k)** | 25% | 28.7M | 4,335.1M (`train_cosmopedia` + `fineweb`) | **0.007x** | Zero Repetition (0.7% seen once) |
+
 
 ### Continuous Monitoring & Evaluation Protocol
 1. **Short-Context Preservation**: Evaluate and log **short-context validation loss (2k)** after **EVERY stage** (Stage A, Stage B, and Stage C) to monitor and guarantee short-range capabilities do not degrade during long-context extension.

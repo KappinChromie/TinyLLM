@@ -54,15 +54,27 @@
     "size_bytes": 19680144
   },
   "train_pg19_long": {
-    "tokens": 41808768,
-    "docs": 280,
-    "sha256": "bc152afc218cde5347a71cff11b2c1a3bfb74aff9348d596c319e0a2c8cc8131",
-    "size_bytes": 83617536
+    "tokens": 672238526,
+    "docs": 5176,
+    "sha256": "08486c09889e3af6aa1e0a83088d1f7a570c2ee1c7e2a8434a5c64aa0bc03272",
+    "size_bytes": 1344477052
   },
   "val_pg19_long": {
-    "tokens": 23370250,
-    "docs": 170,
-    "sha256": "d908c3f25befe3c2208b512168b9e7ea3f7dcb47136cb187ce6d06c0b68a6d14",
-    "size_bytes": 46740500
+    "tokens": 15178124,
+    "docs": 100,
+    "sha256": "5ca3a4ff4165cb9edd8aa3d15a98146a61ec746387bacaf7f9fe1f4b37ad6bc0",
+    "size_bytes": 30356248
+  },
+  "train_fineweb_edu_long": {
+    "tokens": 369645449,
+    "docs": 23530,
+    "sha256": "d1776aa7d1838786b3d7c18c3d538daa7581b331a28ce1d18b289d493864ca72",
+    "size_bytes": 739290898
+  },
+  "val_fineweb_edu_long": {
+    "tokens": 20550554,
+    "docs": 1312,
+    "sha256": "6536e267e0150340f7f7d03be2a493786fa3f7209362e8cbf2111676a4396841",
+    "size_bytes": 41101108
   }
 }
