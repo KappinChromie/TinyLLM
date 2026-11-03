@@ -1,0 +1,23 @@
+Actual Downloaded Data 13-Gram Contamination Report
+===================================================
+Neutral Wikipedia Eval Docs: 12,000
+Neutral Wikipedia Total Words: 8,679,333
+Neutral Wikipedia Unique 13-Grams: 8,450,704
+
+Cosmopedia v2 Training Slice (95% Train Split across all 6 Shards):
+  Total Docs Audited: 2,144,844
+  Total 13-Grams Audited: 1,145,357,633
+  13-Grams Matched: 873
+  Contamination Rate: 0.000076%
+  Contaminated Docs: 431/2,144,844 (0.0201%)
+  Audit Time: 654.4s
+
+FineWeb-Edu Training Slice (95% Train Split across all 2 Shards):
+  Total Docs Audited: 1,382,250
+  Total 13-Grams Audited: 1,049,573,203
+  13-Grams Matched: 84,988
+  Contamination Rate: 0.008097%
+  Contaminated Docs: 1,995/1,382,250 (0.1443%)
+  Audit Time: 553.1s
+
+Total Audit Execution Time: 559.3s
