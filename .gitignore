@@ -1,0 +1,8 @@
+.venv/
+tools/
+models/
+__pycache__/
+*.gguf
+*.zip
+*.tar.gz
+*.bin
