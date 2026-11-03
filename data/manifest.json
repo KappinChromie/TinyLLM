@@ -6,10 +6,10 @@
     "size_bytes": 1156552582
   },
   "val_tinystories": {
-    "tokens": 5811479,
-    "docs": 21990,
-    "sha256": "04d9c4e38cfd939f3e94f3ee5b37c14311fa9871e1c88ab3fc8235f42fd60588",
-    "size_bytes": 11622958
+    "tokens": 3891039,
+    "docs": 15389,
+    "sha256": "415baf475e24fe29d78f5c6fbd0b82e5740983065a6e0e0fd1d10d79094299fb",
+    "size_bytes": 7782078
   },
   "train_cosmopedia": {
     "tokens": 2298812991,
@@ -18,10 +18,10 @@
     "size_bytes": 4597625982
   },
   "val_cosmopedia": {
-    "tokens": 121001234,
-    "docs": 112890,
-    "sha256": "71b08a60e54f3fa0eb86a5aaa34535c2441dc1bc663c761e7686e47c53f21635",
-    "size_bytes": 242002468
+    "tokens": 118972941,
+    "docs": 111217,
+    "sha256": "3f49aa13463282e58c78f5b46b93bea5b3e3d211b411c76c76a30624100f7d1f",
+    "size_bytes": 237945882
   },
   "train_fineweb_edu": {
     "tokens": 2036284494,
@@ -30,10 +30,10 @@
     "size_bytes": 4072568988
   },
   "val_fineweb_edu": {
-    "tokens": 108406401,
-    "docs": 72750,
-    "sha256": "f39b8ba2712e835b3640b4045caaaa8959c6ba4d66d5e65fa918f08f69c9fc24",
-    "size_bytes": 216812802
+    "tokens": 107056933,
+    "docs": 71897,
+    "sha256": "34f0885d7199b6a2b917a10a75a3a90bd864b80b9bbe0a1707df979d487fa908",
+    "size_bytes": 214113866
   },
   "val_wikipedia_neutral": {
     "tokens": 19350169,
@@ -66,15 +66,15 @@
     "size_bytes": 30356248
   },
   "train_fineweb_edu_long": {
-    "tokens": 369645449,
-    "docs": 23530,
-    "sha256": "d1776aa7d1838786b3d7c18c3d538daa7581b331a28ce1d18b289d493864ca72",
-    "size_bytes": 739290898
+    "tokens": 369168411,
+    "docs": 23541,
+    "sha256": "a9aeec9485aeeb58b5e9ff968e7ea2f032d9df222039db5e0ebaf4231580e3f2",
+    "size_bytes": 738336822
   },
   "val_fineweb_edu_long": {
-    "tokens": 20550554,
-    "docs": 1312,
-    "sha256": "6536e267e0150340f7f7d03be2a493786fa3f7209362e8cbf2111676a4396841",
-    "size_bytes": 41101108
+    "tokens": 20738940,
+    "docs": 1285,
+    "sha256": "a86274cf9822a6d65758c71f833581230461b6fff81896d4d9c906ac8539d870",
+    "size_bytes": 41477880
   }
 }

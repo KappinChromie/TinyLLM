@@ -81,7 +81,7 @@ Principle: for small models, **data quality and data fit matter more than volume
 | **Cosmopedia v2** | `HuggingFaceTB/cosmopedia-v2` | Apache 2.0 | Medium (mean 720 tok, max 1.8k) | Dense synthetic textbooks and stories |
 | **FineWeb-Edu** | `HuggingFaceFW/fineweb-edu` | ODC-By 1.0 | Varied (mean 1.1k tok, max 26.9k) | Educational filtered web text |
 | **Wikipedia (en)** | `wikimedia/wikipedia` | CC BY-SA 3.0 / 4.0 | Medium-Long (mean 852.2 tok, 5.46B tok total, 1.77% docs $\ge 8\text{k}$) | Factual reference; neutral evaluation set (~10M tokens); long articles $\ge 8\text{k}$ for Stage B |
-| **FineWeb-Edu ($\ge 8\text{k}$)** | `HuggingFaceFW/fineweb-edu` | ODC-By 1.0 | Long (mean 14.8k tok, ~400M tokens $\ge 8\text{k}$) | Carved directly from training shards for Stage B 25% share (62.5M tokens needed vs ~385M available) |
+| **FineWeb-Edu ($\ge 8\text{k}$)** | `HuggingFaceFW/fineweb-edu` | ODC-By 1.0 | Long (mean 15.7k tok, 369.2M tokens $\ge 8\text{k}$) | Carved strictly from training-split shards for Stage B 25% share (62.5M tokens needed vs 369.2M available; 0 repetition in Stage B pool, though seen at 2k in Stage A) |
 | **PG-19 (Books)** | `emozilla/pg19` | Public Domain / CC0 | Very Long (mean 145.4k tok, 97.0% books $\ge 8\text{k}$, 87.8% books $\ge 32\text{k}$) | Primary source for genuine $\ge 8\text{k}$ and $\ge 32\text{k}$ long context (5,276 books locally, 100 held out for val) |
 
 *Note: arXiv (`ccdv/arxiv-summarization`) was audited and dropped from training due to placeholder contamination (`@xmath`, `@xcite`) and licensing ambiguity.*
@@ -182,16 +182,21 @@ Before committing to the full staged training run:
    - Learning rate: Optimal peak $\eta_0$ determined by the extended LR sweep on the Stage A mix.
    - Global batch: 32 sequences (65,536 tokens, micro-batch 8, 4 grad accum steps).
 3. **Training & Terminal Decay Protocol**:
-   - Each trial trains for exactly 1 hour wall-clock.
-   - Follows WSD with 10% terminal cosine decay down to $0.1\times \eta_0$ (first 54 minutes flat in the stable phase, final 6 minutes cosine decay to $0.1\times \eta_0$) so final validation losses reflect fully converged models.
-4. **Two-Way Fair Evaluation Protocol**:
-   - **Equal Wall-Clock (1 Hour)**: Evaluates quality achievable within fixed compute time, properly accounting for training speed differences (`6L_512H_1KV` sees ~364M tokens/hr vs. `6L_768H_1KV` seeing ~224M tokens/hr).
-   - **Equal Tokens Seen (Iso-Token Checkpoint)**: Evaluates parameter efficiency at identical data exposure (checkpointed at 220M tokens, the volume reached by the slowest finalist).
-5. **Quality vs. Speed Pareto Plots**:
+   - Each trial trains for exactly 1 hour wall-clock at $\eta_0 = 1\times 10^{-3}$ (selected by extended 20-minute sweep).
+   - Follows WSD with 10% terminal cosine decay down to $0.1\times \eta_0$ (first 54 minutes flat in the stable phase, final 6 minutes cosine decay to $0.1\times \eta_0$) so final 1-hour validation losses reflect fully converged models.
+   - **LR Monitoring & Stability Guard**: Monitor `6L_768H_1KV` closely during training; if loss spikes or diverges at $\eta_0 = 1\times 10^{-3}$, re-run that shape at $\eta_0 = 5\times 10^{-4}$ and report both.
+4. **Fair Comparison Protocol (Strict Apples-to-Apples)**:
+   - **Never compare undecayed checkpoints with decayed ones.**
+   - **Iso-Token Checkpoint Comparison (220M tokens)**: Checkpoint all 4 models at exactly 220M tokens (the volume reached by the slowest finalist). Compare undecayed checkpoints directly. In addition, branch a short 5–10% cosine decay to $0.1\times \eta_0$ from the 220M checkpoint to compare equal-token decayed models.
+   - **Iso-Wall-Clock Comparison (1 Hour)**: Compare decayed final checkpoints against decayed final checkpoints at 1 hour (54m stable + 6m cosine decay).
+   - **Noise Floor Threshold**: Before comparing shapes, run `4L_768H_1KV` across multiple random seeds (seeds 42, 43, 44) for 20 minutes each on the Stage A mix to measure the empirical standard deviation and spread in validation loss ($\Delta_{noise}$). **No architectural or KV-head claim smaller than this noise floor may be claimed as real.**
+   - **Comprehensive Validation Suite**: Evaluate validation loss on all 4 clean held-out sets: `val_cosmopedia`, `val_fineweb_edu`, `val_tinystories`, and neutral `val_wikipedia_neutral`. Report cross-entropy loss, bits per token, bits per byte (BPB), and bits per character (BPC).
+5. **Quality vs. Speed Pareto Plots & Generations**:
    - Plot held-out validation loss against single-stream decode speed at 0 context depth.
    - Plot held-out validation loss against single-stream decode speed at 32k context depth.
-   - Compare `4L_768H_1KV` vs. `4L_768H_2KV` validation loss to quantify the exact quality penalty of 1 KV head vs. 2 KV heads.
-6. **Checkpoint & Pause**: Present the comparison table, curves, and Pareto plots for user review and approval to pick the single winning architecture.
+   - Compare `4L_768H_1KV` vs. `4L_768H_2KV` validation loss to quantify the exact quality penalty of 1 KV head vs. 2 KV heads relative to the noise floor.
+   - Save and inspect 10 sample generations per shape with fixed prompts.
+6. **Checkpoint & Pause**: Present the comparison table, curves, Pareto plots, and sample generations for user review and approval to pick the single winning architecture.
 
 **Deliverable:** `results/trials_1hr_summary.csv`, 1-hour trial comparison curves, speed vs. val loss Pareto plots (0 and 32k depth), finalist architecture decision note.
 
@@ -289,7 +294,7 @@ All sources across Stages B and C exhibit repetition factors strictly below 0.42
 | Extension Stage & Source | Share | Tokens Needed | Available Tokens in Shards | Repetition Factor (Needed / Available) | Verdict |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Stage B: Wikipedia Long ($\ge 8\text{k}$)** | 35% | 87.5M | 212.4M (`train_wikipedia_long.bin`) | **0.412x** | Zero Repetition (41.2% seen once) |
-| **Stage B: FineWeb-Edu Long ($\ge 8\text{k}$)** | 25% | 62.5M | 369.6M (`train_fineweb_edu_long.bin`) | **0.169x** | Zero Repetition (16.9% seen once) |
+| **Stage B: FineWeb-Edu Long ($\ge 8\text{k}$)** | 25% | 62.5M | 369.2M (`train_fineweb_edu_long.bin`) | **0.169x** | Zero Repetition in Stage B pool (16.9% seen once; note: seen at 2k in Stage A) |
 | **Stage B: PG-19 Books ($\ge 8\text{k}$)** | 15% | 37.5M | 672.2M (`train_pg19_long.bin`) | **0.056x** | Zero Repetition (5.6% seen once) |
 | **Stage B: Short Replay (2k)** | 25% | 62.5M | 4,335.1M (`train_cosmopedia` + `fineweb`) | **0.014x** | Zero Repetition (1.4% seen once) |
 | **Stage C: PG-19 Books ($\ge 32\text{k}$)** | 75% | 86.0M | 661.6M (PG-19 books $\ge 32\text{k}$) | **0.130x** | Zero Repetition (13.0% seen once) |
