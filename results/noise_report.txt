@@ -1,0 +1,22 @@
+================================================================================
+ NOISE FLOOR ESTIMATION REPORT (4L_768H_1KV, 20-MIN TRIALS, STAGE A MIX)
+================================================================================
+
+ seed    lr  steps  elapsed_sec  tokens_seen  train_loss_final  train_loss_min  val_stage_a_loss  val_cosmopedia_loss  val_cosmopedia_bpb  val_fineweb_loss  val_fineweb_bpb  val_tinystories_loss  val_tinystories_bpb  val_wiki_neutral_loss  val_wiki_neutral_bpb  tok_per_sec  peak_vram_mib
+   42 0.001   1844       1200.1    120848384            4.4780          4.1156               NaN                  NaN                 NaN               NaN              NaN                   NaN                  NaN                    NaN                   NaN     100698.4         4155.4
+   43 0.001   1787       1200.6    117112832            4.4710          4.1608            4.4587               4.1983              1.7415            4.9702           2.2691                3.3284               1.4689                 4.9851                2.5567      97544.5         4154.8
+   44 0.001   1864       1200.6    122159104            4.4526          4.1882            4.4663               4.2000              1.7422            4.9831           2.2750                3.3393               1.4737                 4.9729                2.5504     101752.4         4155.4
+
+Train Loss Across 3 Seeds (42, 43, 44):
+  Seed 42: 4.4780 | Seed 43: 4.4710 | Seed 44: 4.4526
+  Mean: 4.4672 | Std Dev: 0.0131 | Max Spread: 0.0254
+
+Validation Loss (Stage A Mix) Between Seeds 43 and 44:
+  Seed 43: 4.4587 | Seed 44: 4.4663 | Spread (|43 - 44|): 0.0076
+
+Neutral Reference (Wikipedia Shard 40) Validation Loss:
+  Seed 43: 4.9851 | Seed 44: 4.9729 | Spread (|43 - 44|): 0.0122
+
+EMPIRICAL NOISE FLOOR (Delta_noise): 0.0254 loss points
+Decision Rule: Any architectural or KV-head quality difference <= 0.0254 is within empirical noise and cannot be claimed as real.
+================================================================================
