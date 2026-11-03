@@ -1,0 +1,68 @@
+{
+  "train_tinystories": {
+    "tokens": 578276291,
+    "docs": 2119489,
+    "sha256": "2d536fbc5a850c68adbc8ea69f9f016eb9093ef1bae5a911266b7ff42641b3f7",
+    "size_bytes": 1156552582
+  },
+  "val_tinystories": {
+    "tokens": 5811479,
+    "docs": 21990,
+    "sha256": "04d9c4e38cfd939f3e94f3ee5b37c14311fa9871e1c88ab3fc8235f42fd60588",
+    "size_bytes": 11622958
+  },
+  "train_cosmopedia": {
+    "tokens": 2298812991,
+    "docs": 2144844,
+    "sha256": "2d9a0cf2cbe722ae3aca91676961c7b61af872c448a16803f352aa6d6238debc",
+    "size_bytes": 4597625982
+  },
+  "val_cosmopedia": {
+    "tokens": 121001234,
+    "docs": 112890,
+    "sha256": "71b08a60e54f3fa0eb86a5aaa34535c2441dc1bc663c761e7686e47c53f21635",
+    "size_bytes": 242002468
+  },
+  "train_fineweb_edu": {
+    "tokens": 2036284494,
+    "docs": 1382250,
+    "sha256": "fd4cc7fb615178d46311ebf7e8f18f3e54705cc86edaa9e8a34e2b4778f295dc",
+    "size_bytes": 4072568988
+  },
+  "val_fineweb_edu": {
+    "tokens": 108406401,
+    "docs": 72750,
+    "sha256": "f39b8ba2712e835b3640b4045caaaa8959c6ba4d66d5e65fa918f08f69c9fc24",
+    "size_bytes": 216812802
+  },
+  "val_wikipedia_neutral": {
+    "tokens": 19350169,
+    "docs": 12000,
+    "sha256": "6e38699e4340f05cb0652f0d5bfe5f4a9844088b4a59120c5a0875c47ebe4dea",
+    "size_bytes": 38700338
+  },
+  "train_wikipedia_long": {
+    "tokens": 212430994,
+    "docs": 20612,
+    "sha256": "c746ba7a867b9085337a85d9d168bbfed17755253bff2763ff41117310410a9f",
+    "size_bytes": 424861988
+  },
+  "val_wikipedia_long": {
+    "tokens": 9840072,
+    "docs": 1086,
+    "sha256": "cf39673418e98240e8a94a3db711f647231ba3cda3ca5b28e8ebb6b1cf6ea9d8",
+    "size_bytes": 19680144
+  },
+  "train_pg19_long": {
+    "tokens": 41808768,
+    "docs": 280,
+    "sha256": "bc152afc218cde5347a71cff11b2c1a3bfb74aff9348d596c319e0a2c8cc8131",
+    "size_bytes": 83617536
+  },
+  "val_pg19_long": {
+    "tokens": 23370250,
+    "docs": 170,
+    "sha256": "d908c3f25befe3c2208b512168b9e7ea3f7dcb47136cb187ce6d06c0b68a6d14",
+    "size_bytes": 46740500
+  }
+}

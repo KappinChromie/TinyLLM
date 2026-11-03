@@ -1,0 +1,6 @@
+source,sample_docs,tokens_per_char,chars_per_token,bytes_per_token
+TinyStories,200,0.3062,3.266,3.269
+Cosmopedia v2,200,0.2878,3.474,3.478
+FineWeb-Edu,200,0.3176,3.148,3.16
+Wikipedia (en),200,0.3576,2.797,2.813
+PG-19 (Books),50,0.3572,2.799,2.804

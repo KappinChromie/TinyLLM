@@ -80,15 +80,16 @@ Principle: for small models, **data quality and data fit matter more than volume
 | **TinyStories** | `roneneldan/TinyStories` | CDLA-Permissive-1.0 | Short (mean 208 tok, max 988) | Coherent simple reasoning for tiny models |
 | **Cosmopedia v2** | `HuggingFaceTB/cosmopedia-v2` | Apache 2.0 | Medium (mean 720 tok, max 1.8k) | Dense synthetic textbooks and stories |
 | **FineWeb-Edu** | `HuggingFaceFW/fineweb-edu` | ODC-By 1.0 | Varied (mean 1.1k tok, max 26.9k) | Educational filtered web text |
-| **Wikipedia (en)** | `wikimedia/wikipedia` | CC BY-SA 3.0 / 4.0 | Medium-Long (mean 5.2k tok, max 28.7k) | Factual reference; neutral evaluation set |
-| **PG-19 (Books)** | `emozilla/pg19` | Public Domain / CC0 | Very Long (mean 108k tok, max 1.48M) | Primary source for genuine $\ge 32\text{k}$ context |
-| **arXiv Papers** | `ccdv/arxiv-summarization` | Academic / CC-BY | Long (mean 9.4k tok, max 67.4k) | Technical long-form text for $\ge 8\text{k}$ and $\ge 32\text{k}$ |
+| **Wikipedia (en)** | `wikimedia/wikipedia` | CC BY-SA 3.0 / 4.0 | Medium-Long (mean 852.2 tok, 5.46B tok total, 1.77% docs $\ge 8\text{k}$) | Factual reference; neutral evaluation set (~10M tokens) |
+| **PG-19 (Books)** | `emozilla/pg19` | Public Domain / CC0 | Very Long (mean 107.2k tok, 3.08B tok total, 80.3% docs $\ge 32\text{k}$) | Primary source for genuine $\ge 8\text{k}$ and $\ge 32\text{k}$ long context |
+
+*Note: arXiv (`ccdv/arxiv-summarization`) was audited and dropped from training due to placeholder contamination (`@xmath`, `@xcite`) and licensing ambiguity.*
 
 ### Processing & Holdouts
 1. **Holdouts taken by document before tokenizing**: Hold out a fixed 5% validation set per source by document. Never mix train and val.
-2. **Neutral reference set**: Wikipedia held-out set is reserved as a neutral evaluation corpus neither model sees during Phase 5 data ablation.
-3. **Long-document evaluation set**: Dedicated held-out pool of 100+ documents $\ge 32\text{k}$ tokens (from PG-19 and arXiv) for token-position bucket perplexity and needle retrieval.
-4. **Tokenization**: Memmapped `uint16` binary shards (`.bin`) with EOS between documents once the tokenizer is trained.
+2. **Neutral reference set**: 10M tokens held out from Wikipedia shard 40, reserved as a neutral evaluation corpus neither model sees during Phase 5 data ablation, audited for 13-gram non-contamination.
+3. **Long-document evaluation set**: Dedicated held-out pool of 170+ books and long articles $\ge 32\text{k}$ tokens from PG-19 and Wikipedia for token-position bucket perplexity and needle retrieval.
+4. **Tokenization**: Memmapped `uint16` binary shards (`.bin`) with EOS between documents.
 
 **Deliverable:** `results/length_distribution.csv`, `data/` tokenized shards, `data/manifest.json`.
 
@@ -100,8 +101,8 @@ Principle: for small models, **data quality and data fit matter more than volume
 
 - Phase 1 speed sweep demonstrated that moving from 8k to 32k incurs an 11% to 14% decode speed penalty, and 49k incurs a 15% to 21.5% penalty.
 - To maximize decode tokens/sec within the speed budget, the project adopts **Option A: custom 8,192 (8k) SentencePiece BPE** trained directly on the approved training data mix.
-- **Training Mixture for Tokenizer**: Train primarily on the Stage A foundation mix (~90% share across Cosmopedia v2, FineWeb-Edu, and TinyStories), with a small ~10% share from long-form sources (Wikipedia, PG-19, clean arXiv) to ensure common book and academic vocabulary are represented.
-- **Compression Efficiency Verification**: Immediately after tokenizer training, compute and report **compression efficiency** (characters per token and bytes per token) across all candidate sources (TinyStories, Cosmopedia, FineWeb-Edu, Wikipedia, PG-19, and arXiv) to verify that long-form text is not under-served.
+- **Training Mixture for Tokenizer**: Train primarily on the Stage A foundation mix (~90% share across Cosmopedia v2, FineWeb-Edu, and TinyStories), with a small ~10% share from long-form sources (Wikipedia, PG-19) to ensure common book and factual vocabulary are represented. Trained with `byte_fallback=True` and `remove_extra_whitespaces=False` to prevent indentation collapsing.
+- **Compression Efficiency Verification**: Immediately after tokenizer training, compute and report **compression efficiency** (characters per token and bytes per token) across all candidate sources (TinyStories, Cosmopedia, FineWeb-Edu, Wikipedia, and PG-19) to verify that long-form text is not under-served. Also verify 100% round-trip tokenization consistency in `llama.cpp` using `llama-tokenize.exe`.
 - Logit-level distillation is dropped for now (revisit logit KD only if the 8k model plateaus). Sequence-level distillation (training on teacher-generated synthetic text) remains fully supported.
 
 **Deliverable:** `tokenizer/` with trained SentencePiece model, vocab files, and compression ratio report across sources.
@@ -118,14 +119,23 @@ All models use the custom 8k SentencePiece tokenizer, RMSNorm, RoPE, SwiGLU, and
 - **Control Trial**: `4L / 768H / 2048FFN` with **2 KV heads** (benchmarked against Finalist 1 to quantify the exact quality vs. speed tradeoff of 1 KV head).
 
 ### Implementation & Training Recipe
-- **Attention & Kernels**: bf16 autocast, fused AdamW, SDPA / FlashAttention, gradient checkpointing. Micro-batch size 1 at long context.
-- **Chunked Loss**: Compute cross-entropy loss in chunks over the sequence dimension to eliminate peak VRAM spikes from large logit matrices at extended sequence lengths.
-- **Environment**: If Windows blocks `torch.compile` or FlashAttention (Triton), switch to WSL2 (CUDA 12.4), informing the user before migrating.
-- **Global Batch Size**: Global batch target around 0.25M–0.5M tokens via gradient accumulation.
-- **Learning Rate Tuning**: Quick 3-point LR sweep ($\eta_0 \in \{1\times 10^{-3}, 2\times 10^{-3}, 3\times 10^{-3}\}$) on a short 200-step run per finalist to select optimal peak learning rate. Weight decay 0.1, grad clip 1.0, tied embeddings.
+- **Attention & Kernels**: bf16 autocast, fused AdamW, native PyTorch FlashAttention-2 / SDPA under WSL2 (Ubuntu 24.04 LTS, CUDA 12.4), gradient checkpointing. Peak VRAM is only 2.18–2.48 GB even at 32k context.
+- **Chunked Loss**: Cross-entropy computed in chunks over the sequence dimension to eliminate peak VRAM spikes from large logit matrices at extended sequence lengths.
+- **Global Batch Sizing per Stage**:
+  - **Stage A (2k context)**: Global batch = 128 sequences (262,144 tokens ~0.26M tokens). Micro-batch = 8 sequences, 16 grad accum steps.
+  - **Stage B (8k context)**: Global batch = 32 sequences (262,144 tokens ~0.26M tokens). Micro-batch = 2 sequences, 16 grad accum steps.
+  - **Stage C (32k context)**: Global batch = 4 sequences (131,072 tokens ~0.13M tokens). Micro-batch = 1 sequence, 4 grad accum steps (yields 875 optimizer steps over 3,500 sequences).
+- **Learning Rate Tuning**: Quick 3-point LR sweep ($\eta_0 \in \{1\times 10^{-3}, 2\times 10^{-3}, 3\times 10^{-3}\}$) on a short 200-step run per finalist on real tokenized data in WSL2 to select optimal peak learning rate. Weight decay 0.1, grad clip 1.0, tied embeddings.
 
-### Training Throughput Benchmark & Token Budget Calculator
-Measure training tokens/sec per finalist at 2k, 8k, and 32k context on the RTX 3070 Ti. Treat unmeasured numbers as guesses.
+### Measured Training Throughput (RTX 3070 Ti, WSL2, Flash SDPA)
+Measured empirically on real hardware across all trial shapes (from `results/train_throughput.csv`):
+
+| Architecture | Total Params | 2k Tok/s (M tok/hr) | 8k Tok/s (M tok/hr) | 32k Tok/s (M tok/hr) | Peak VRAM |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`4L_768H_1KV`** | 30.28M | 87,375 (314.5M/hr) | 58,146 (209.3M/hr) | 29,627 (106.7M/hr) | 2.32 GB |
+| **`6L_512H_1KV`** | 19.54M | 101,053 (363.8M/hr) | 63,744 (229.5M/hr) | 31,080 (111.9M/hr) | 2.19 GB |
+| **`6L_768H_1KV`** | 42.28M | 62,210 (224.0M/hr) | 40,146 (144.5M/hr) | 19,973 (71.9M/hr) | 2.48 GB |
+| **`4L_768H_2KV` (Control)** | 30.68M | 85,553 (308.0M/hr) | 57,381 (206.6M/hr) | 29,279 (105.4M/hr) | 2.32 GB |
 
 ```python
 # budget.py
@@ -192,31 +202,56 @@ LR
 |     /                          \    /                         \  /       \ [Stage C2: Anneal]
 |    /     [Decay Branch A] \     \  /    [Decay Branch B] \     \/         \
 |   /      \-----------------\     \/     \-----------------\                \---> (0.1x peak)
-|  /       (5-10% fallback)   \           (5-10% fallback)   \
+|  /       (100M-tok fallback)\           (100M-tok fallback)\
 +--+---------------------------+----------+-------------------+-------------+---------> Tokens
    0                         Stage A                          Stage B       Stage C
 ```
 
+#### Total Training Token Allocation & Reserve Budget
+The training capacity on the RTX 3070 Ti is planned around 3.2B tokens:
+- **Stage A (2k Short Foundation)**: 2,500M tokens (78.1%)
+- **Stage B (8k Long Extension)**: 250M tokens (7.8%)
+- **Stage C (32k Long Extension & Anneal)**: 115M tokens (3.6%)
+- **Quality Anneal (Stage C2)**: 35M tokens (1.1%)
+- **Reserve Budget (Safety & Contingency)**: 300M tokens (9.4%)
+- **Total Planned Capacity**: 3,200M tokens (100.0%)
+
+*The 300M-token reserve is explicitly set aside for dynamic stage extensions (e.g. +2,000 sequences in Stage C) or on-demand fallback decay branches without exceeding the overall compute budget.*
+
+#### Stage Details & Data Mixtures
+
 1. **Stage A: Foundation Pretraining (Context 1,024–2,048 tokens, RoPE base $\theta = 10{,}000$)**
-   - Data: Winning data mix from Phase 5 (Cosmopedia v2 + FineWeb-Edu + TinyStories blend).
-   - LR Schedule: Linear warmup over first 1% of Stage A steps to peak LR $\eta_0$, remaining in the **stable flat phase** at $\eta_0$ for the remainder of Stage A.
-   - **Fallback Decay Branch A**: At the end of Stage A, copy the checkpoint and branch off a short decay run (~5–10% of Stage A tokens, decaying to $0.1\times \eta_0$) to produce a fully converged short-context fallback model in case subsequent extension stages fail. The undecayed checkpoint continues into Stage B.
+   - **Data Mixture**: Winning data blend from Phase 5 (Cosmopedia v2 + FineWeb-Edu + TinyStories).
+   - **LR Schedule**: Linear warmup over first 1% of Stage A steps to peak LR $\eta_0$, remaining flat in the **stable phase** at $\eta_0$.
+   - **On-Demand Fallback Decay Branch A**: If needed, copy the checkpoint at the end of Stage A and run a 100M-token cosine decay down to $0.1\times \eta_0$ to produce a fully converged short-context release checkpoint. The undecayed checkpoint continues into Stage B.
 
 2. **Stage B: Long-Context Extension to 8k (Context 8,192 tokens, RoPE base $\theta = 500{,}000$–$1{,}000{,}000$)**
-   - Data Mix: **75% genuinely long documents $\ge 8\text{k}$** (Wikipedia long articles, FineWeb-Edu $\ge 8\text{k}$, clean arXiv, PG-19) + **25% Short-Context Replay** (Cosmopedia v2, clean FineWeb-Edu) to prevent short-range language drift.
-   - LR Schedule: Starts at **$0.7\times \eta_0$** with a brief 0.1% micro-ramp. Does NOT re-warm to peak $\eta_0$ and does NOT start from a decayed LR. Remains flat at $0.7\times \eta_0$.
-   - **Fallback Decay Branch B**: At the end of Stage B, copy the checkpoint and run a short decay (~5–10% of Stage B tokens) down to $0.1\times \eta_0$ as an 8k fallback model.
-   - **Verification Gate**: Evaluate both (1) position-bucket loss and passkey retrieval at 1k, 2k, 4k, 8k, AND (2) short-context validation loss on the 2k benchmark to confirm no regression. Must pass before starting Stage C.
+   - **Token Budget**: 250M tokens (~30,500 sequences of 8k).
+   - **Global Batch**: 32 sequences (262,144 tokens ~0.26M tokens, ~950 optimizer steps).
+   - **Internally Consistent Data Mixture (100% Total)**:
+     - **Wikipedia (Long articles $\ge 8\text{k}$)**: 35% (87.5M tokens)
+     - **FineWeb-Edu (Long articles $\ge 8\text{k}$)**: 25% (62.5M tokens)
+     - **PG-19 (Books $\ge 8\text{k}$)**: 15% (37.5M tokens)
+     - **Short Replay (Cosmopedia v2 + FineWeb-Edu short)**: 25% (62.5M tokens)
+     - **Sum**: $35\% + 25\% + 15\% + 25\% = 100.0\%$ (250.0M tokens).
+   - **Replay Implementation**: Short replay sequences are batched exclusively in separate 2,048-token batches (alternating with long batches) to prevent cross-document attention leakage across packed short documents.
+   - **LR Schedule**: Continues directly at **$0.7\times \eta_0$** (with a brief 0.1% micro-ramp). Does NOT re-warm to full peak $\eta_0$ and does NOT start from a decayed LR.
+   - **On-Demand Fallback Decay Branch B**: If Stage C is not pursued or fails its entrance checks, branch off a 100M-token cosine decay to $0.1\times \eta_0$ from the Stage B checkpoint to produce a verified, stable 8k-context release model.
+   - **Verification Gate**: Evaluate both (1) position-bucket loss and passkey retrieval at 1k, 2k, 4k, 8k, AND (2) short-context validation loss on the 2k benchmark to confirm zero capability degradation. Both must pass before launching Stage C.
 
 3. **Stage C: Long-Context Extension to 32k & Quality Anneal (Context 32,768 tokens, RoPE base $\theta = 1{,}000{,}000$–$4{,}000{,}000$)**
-   - Data Mix: **75% genuinely long documents $\ge 32\text{k}$** (PG-19 books, clean arXiv) + **25% Short-Context Replay** (Cosmopedia v2, clean FineWeb-Edu).
-   - **Sequence Sizing**: Sized explicitly by sequence count: **target 3,500 sequences of 32,768 tokens** (~114.7M tokens).
-   - **Sub-stage C1 (first 50% of Stage C sequences)**: Stable 32k adaptation at flat **$0.5\times \eta_0$** (with 0.1% micro-ramp).
-   - **Dynamic Extension Rule**: If 32k passkey retrieval is below 80% or 32k loss slope is still decreasing steeply at the end of Sub-stage C1, extend Sub-stage C1 by an additional **2,000 sequences** before initiating the terminal anneal.
-   - **Sub-stage C2 (final 50% of Stage C sequences) - Quality Anneal**: LR decays smoothly (cosine decay) down to **$0.1\times \eta_0$**, while shifting the mixture toward the **highest-quality** data across both long documents and general educational text.
+   - **Token Budget**: Exactly **3,500 sequences of 32,768 tokens** (~114.7M tokens).
+   - **Global Batch**: 4 sequences of 32k (~131k tokens, exactly 875 optimizer steps). Micro-batch = 1 seq, 4 grad accum steps.
+   - **Data Mixture**:
+     - **PG-19 Books (Continuous sequences $\ge 32\text{k}$)**: 75% (86.0M tokens, ~2,625 sequences).
+     - **Short Replay (Cosmopedia v2 + FineWeb-Edu, in separate 2k batches)**: 25% (28.7M tokens, ~875 sequence equivalents).
+     - **Sum**: 100.0% (114.7M tokens).
+   - **Sub-stage C1 (Sequences 1–1,750)**: Stable 32k adaptation at flat **$0.5\times \eta_0$** (with 0.1% micro-ramp).
+   - **Dynamic Extension Rule**: If 32k passkey retrieval is below 80% or loss slope is still decreasing steeply at sequence 1,750, draw up to 2,000 additional sequences (+500 optimizer steps, +65.5M tokens) from the 300M reserve budget before initiating the terminal anneal.
+   - **Sub-stage C2 (Final 1,750 Sequences) - Quality Anneal**: LR decays smoothly via cosine schedule down to **$0.1\times \eta_0$**, while shifting the mixture toward the highest-quality educational and long-form data.
 
 ### Long-Document Data Strategy
-- FineWeb-Edu and Wikipedia have **0 documents ≥ 32k tokens**. PG-19 is the sole large public-domain corpus with continuous documents ≥ 32k tokens (**2.95B tokens ≥ 32k**), supplemented by clean arXiv papers (suolyer/pile_arxiv, with 25.4M tokens ≥ 32k).
+- FineWeb-Edu and Wikipedia have **0 documents ≥ 32k tokens**. PG-19 is the verified large public-domain corpus with continuous documents ≥ 32k tokens (**2.95B tokens ≥ 32k** across 28,752 books).
 - **No document packing without disclosure**: Do not pack unrelated short documents together as a substitute for long context without explicitly reporting it. For Stage C, 3,500 continuous sequences of 32k tokens require ~114.7M tokens, which is comfortably supplied by PG-19 books without packing.
 
 ### Continuous Monitoring & Evaluation Protocol

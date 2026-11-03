@@ -1,0 +1,6 @@
+Tokenizer Round-Trip Verification Report
+Total test strings: 300
+Total tokens tested: 10647
+Total mismatches: 0
+
+SUCCESS: 100% exact match between SentencePiece and llama.cpp across all test cases!
