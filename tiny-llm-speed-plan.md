@@ -215,33 +215,24 @@ LR
    - **Dynamic Extension Rule**: If 32k passkey retrieval is below 80% or 32k loss slope is still decreasing steeply at the end of Sub-stage C1, extend Sub-stage C1 by an additional **2,000 sequences** before initiating the terminal anneal.
    - **Sub-stage C2 (final 50% of Stage C sequences) - Quality Anneal**: LR decays smoothly (cosine decay) down to **$0.1\times \eta_0$**, while shifting the mixture toward the **highest-quality** data across both long documents and general educational text.
 
-### Continuous Monitoring Protocol
-- Evaluate and log **short-context validation loss (2k)** after **EVERY stage** (Stage A, Stage B, and Stage C) to monitor and guarantee short-range capabilities do not degrade during long-context extension.
-- Position-bucket validation loss across buckets: `[0-1k]`, `[1-2k]`, `[2-4k]`, `[4-8k]`, `[8-16k]`, `[16-32k]`.
-- Needle-in-a-haystack / passkey retrieval at 1k, 2k, 4k, 8k, 16k, 32k ($\ge 20$ trials per depth).
-
-### Export & Long-Context Speed Verification
-1. Export final PyTorch checkpoint to GGUF; verify metadata encodes context length 32,768 and extended RoPE base.
-2. Verify llama.cpp perplexity and passkey retrieval match PyTorch results at 32k context.
-3. Benchmark final model in llama.cpp at depths 0, 8k, 16k, and 32k with 5 repetitions and error bars.
-
-**Deliverables:** Stage checkpoints, fallback decay branch checkpoints, position-bucket loss curves, `results/long_context_eval.csv`, passkey accuracy table, short-context regression logs, `results/quality.csv`.
-
 ### Long-Document Data Strategy
-- FineWeb-Edu and Wikipedia have **0 documents $\ge 32\text{k}$ tokens**. PG-19 is the sole large public-domain corpus with continuous documents $\ge 32\text{k}$ tokens (1.86B tokens), supplemented by long arXiv papers (132M tokens $\ge 32\text{k}$).
-- **No document packing without disclosure**: Do not pack unrelated short documents together as a substitute for long context without explicitly reporting it. For Stage C, repeating genuinely long documents for 2–4 epochs is preferred over synthetic concatenation.
+- FineWeb-Edu and Wikipedia have **0 documents ≥ 32k tokens**. PG-19 is the sole large public-domain corpus with continuous documents ≥ 32k tokens (**2.95B tokens ≥ 32k**), supplemented by clean arXiv papers (suolyer/pile_arxiv, with 25.4M tokens ≥ 32k).
+- **No document packing without disclosure**: Do not pack unrelated short documents together as a substitute for long context without explicitly reporting it. For Stage C, 3,500 continuous sequences of 32k tokens require ~114.7M tokens, which is comfortably supplied by PG-19 books without packing.
 
-### Evaluation Protocol (run after Stages A, B, and C)
-1. **Validation loss by token position bucket**: Held-out perplexity across buckets: `[0-1k]`, `[1-2k]`, `[2-4k]`, `[4-8k]`, `[8-16k]`, and `[16-32k]` on held-out long documents.
-2. **Passkey / Needle Retrieval Accuracy**: Needle-in-a-haystack retrieval at 1k, 2k, 4k, 8k, 16k, and 32k context depths (at least 20 trials per depth with needle inserted at varied depth percentages).
-3. **Success Criteria**: Flat loss curve across position buckets and non-trivial passkey accuracy count as success for that length. Report the longest context depth where it genuinely succeeds.
+### Continuous Monitoring & Evaluation Protocol
+1. **Short-Context Preservation**: Evaluate and log **short-context validation loss (2k)** after **EVERY stage** (Stage A, Stage B, and Stage C) to monitor and guarantee short-range capabilities do not degrade during long-context extension.
+2. **Position-Bucket Validation Loss**: Measure held-out perplexity across buckets: [0-1k], [1-2k], [2-4k], [4-8k], [8-16k], and [16-32k] on held-out long documents.
+3. **Passkey / Needle Retrieval Accuracy**: Needle-in-a-haystack retrieval at 1k, 2k, 4k, 8k, 16k, and 32k context depths (at least 20 trials per depth with needle inserted at varied depth percentages).
+4. **Success Criteria**: Flat loss curve across position buckets and non-trivial passkey accuracy count as success for that length. Report the longest context depth where it genuinely succeeds.
 
 ### Export & Long-Context Speed Verification
 1. Export final PyTorch checkpoint to GGUF; verify metadata encodes context length 32,768 and extended RoPE base.
 2. Verify llama.cpp perplexity and passkey retrieval match PyTorch results at 32k context.
 3. Benchmark final model in llama.cpp at depths 0, 8k, 16k, and 32k with 5 repetitions and error bars.
 
-**Deliverables:** Stage checkpoints, position-bucket loss curves, `results/long_context_eval.csv`, passkey accuracy table, `results/quality.csv`.
+**Deliverables:** Stage checkpoints, fallback decay branch checkpoints, position-bucket loss curves, 
+esults/long_context_eval.csv, passkey accuracy table, short-context regression logs, 
+esults/quality.csv.
 
 ---
 
