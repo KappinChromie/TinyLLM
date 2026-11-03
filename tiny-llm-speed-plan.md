@@ -64,35 +64,33 @@ Goal: map speed against shape, locate the overhead floor, and identify the **lar
 
 ---
 
-## Phase 2: Data
+## Phase 2: Data & length distribution
 
-Principle: for small models, **data quality and data fit matter more than volume**. Choose data matched to model capacity.
+Principle: for small models, **data quality and data fit matter more than volume**. Choose data matched to model capacity and context length requirements.
 
-### Candidate sources (verify availability)
+### Sequence of execution
+1. **Data length-distribution analysis**: Compute token-length distributions across all candidate sources to verify volume of documents at $\ge 2\text{k}$, $\ge 8\text{k}$, and $\ge 32\text{k}$ tokens.
+2. **Pause and report**: Present distribution analysis, license status, proposed mixture, and download sizes for user review.
+3. **Train custom tokenizer**: Train the custom 8k SentencePiece tokenizer **only after the final data mixture is approved by the user**.
 
-| Tier | Dataset | Notes |
-|---|---|---|
-| Simple, coherent | **TinyStories** (`roneneldan/TinyStories`) | ~0.5B tokens. Models under ~30M params can write coherent stories on this. |
-| Synthetic educational | **Cosmopedia v2** (in `HuggingFaceTB/smollm-corpus`) | LLM-generated textbooks, stories, and how-tos. High quality and dense. |
-| Filtered web | **FineWeb-Edu** (`HuggingFaceFW/fineweb-edu`, also the deduped copy in `smollm-corpus`) | Educational-quality-filtered web text. Use `sample-10BT` or stream subsets. |
-| Code (optional) | **Python-Edu** (in `smollm-corpus`) | Only if you want code ability. |
-| Math (optional) | **FineMath** | Only if you want math ability. |
-| Reference | Wikipedia / Simple Wikipedia | Small, clean, factual. |
+### Candidate sources (verified on Hugging Face)
 
-### Mixture guidance by model size
+| Source | Hugging Face ID | License | Length Profile | Role |
+|---|---|---|---|---|
+| **TinyStories** | `roneneldan/TinyStories` | CDLA-Permissive-1.0 | Short (mean 208 tok, max 988) | Coherent simple reasoning for tiny models |
+| **Cosmopedia v2** | `HuggingFaceTB/cosmopedia-v2` | Apache 2.0 | Medium (mean 720 tok, max 1.8k) | Dense synthetic textbooks and stories |
+| **FineWeb-Edu** | `HuggingFaceFW/fineweb-edu` | ODC-By 1.0 | Varied (mean 1.1k tok, max 26.9k) | Educational filtered web text |
+| **Wikipedia (en)** | `wikimedia/wikipedia` | CC BY-SA 3.0 / 4.0 | Medium-Long (mean 5.2k tok, max 28.7k) | Factual reference; neutral evaluation set |
+| **PG-19 (Books)** | `emozilla/pg19` | Public Domain / CC0 | Very Long (mean 108k tok, max 1.48M) | Primary source for genuine $\ge 32\text{k}$ context |
+| **arXiv Papers** | `ccdv/arxiv-summarization` | Academic / CC-BY | Long (mean 9.4k tok, max 67.4k) | Technical long-form text for $\ge 8\text{k}$ and $\ge 32\text{k}$ |
 
-- **Under ~30M params:** mostly TinyStories + Cosmopedia. Broad web text will make a very small model's output worse and less coherent, because it lacks the capacity to model it.
-- **30M-150M params:** Cosmopedia + FineWeb-Edu as the bulk, with some TinyStories-style simple text and optionally small code/math slices.
-- **150M+ params:** FineWeb-Edu as the bulk, Cosmopedia as a large share, then code/math slices.
+### Processing & Holdouts
+1. **Holdouts taken by document before tokenizing**: Hold out a fixed 5% validation set per source by document. Never mix train and val.
+2. **Neutral reference set**: Wikipedia held-out set is reserved as a neutral evaluation corpus neither model sees during Phase 5 data ablation.
+3. **Long-document evaluation set**: Dedicated held-out pool of 100+ documents $\ge 32\text{k}$ tokens (from PG-19 and arXiv) for token-position bucket perplexity and needle retrieval.
+4. **Tokenization**: Memmapped `uint16` binary shards (`.bin`) with EOS between documents once the tokenizer is trained.
 
-### Processing
-
-1. Take validation splits **by document** *before* tokenizing, and keep them fixed for the whole project. Hold out a separate val set per source.
-2. Prefer already-deduplicated sources. If mixing multiple sources, run a quick exact-hash dedup across them.
-3. Tokenize once, write to `uint16` memmapped `.bin` files (nanoGPT style), with an EOS between documents.
-4. Record the exact token count per source.
-
-**Deliverable:** `data/` with tokenized shards, `data/manifest.json` (source, token count, hash).
+**Deliverable:** `results/length_distribution.csv`, `data/` tokenized shards, `data/manifest.json`.
 
 ---
 
@@ -101,33 +99,30 @@ Principle: for small models, **data quality and data fit matter more than volume
 **Decision (Post-Phase 1): Custom 8k SentencePiece tokenizer.**
 
 - Phase 1 speed sweep demonstrated that moving from 8k to 32k incurs an 11% to 14% decode speed penalty, and 49k incurs a 15% to 21.5% penalty.
-- To maximize decode tokens/sec within the speed budget, the project adopts **Option A: custom 8,192 (8k) SentencePiece BPE** trained directly on the training data mix.
+- To maximize decode tokens/sec within the speed budget, the project adopts **Option A: custom 8,192 (8k) SentencePiece BPE** trained directly on the approved training data mix.
 - Logit-level distillation is dropped for now (revisit logit KD only if the 8k model plateaus). Sequence-level distillation (training on teacher-generated synthetic text) remains fully supported.
 
 **Deliverable:** `tokenizer/` with trained SentencePiece model and vocabulary.
 
 ---
 
-## Phase 4: Training recipe, staged context schedule, and token budget
+## Phase 4: Training recipe, 1-hour finalist comparison trials, and token budget
 
-### Staged Context Schedule
-Rather than training at a fixed context length, training follows a staged curriculum up to 32k tokens:
-- **Stage A: Pretraining (about 85-90% of token budget)**: 1024-2048 context, RoPE base 10,000.
-- **Stage B: Extend to 8k (about 7-10% of token budget)**: Raise RoPE base (test 500k-1M), continue training at 8k context on genuinely long documents. Pass checks before proceeding.
-- **Stage C: Extend to 32k (about 3-5% of token budget)**: Raise RoPE base (test 1M-4M), continue training at 32k context on documents that are actually >= 32k tokens.
+### Architecture Finalists & Control Trial
+All models use the custom 8k SentencePiece tokenizer, RMSNorm, RoPE, SwiGLU, and tied embeddings:
+- **Finalist 1**: `4L / 768H / 2048FFN` (1 KV head)
+- **Finalist 2**: `6L / 512H / 1280FFN` (1 KV head)
+- **Finalist 3**: `6L / 768H / 2048FFN` (1 KV head)
+- **Control Trial**: `4L / 768H / 2048FFN` with **2 KV heads** (benchmarked against Finalist 1 to quantify the exact quality vs. speed tradeoff of 1 KV head).
 
-Finalize exact budget splits after measuring training tokens/sec at 2k, 8k, and 32k context. Propose the split and verify with measured numbers before launching.
+### Implementation & Training Recipe
+- **Attention & Kernels**: bf16 autocast, fused AdamW, SDPA / FlashAttention, gradient checkpointing. Micro-batch size 1 at long context.
+- **Chunked Loss**: Compute cross-entropy loss in chunks over the sequence dimension to eliminate peak VRAM spikes from large logit matrices at extended sequence lengths.
+- **Environment**: If Windows blocks `torch.compile` or FlashAttention (Triton), switch to WSL2 (CUDA 12.4), informing the user before migrating.
+- **Batching & Optimization**: Global batch target 0.25–0.5M tokens via gradient accumulation. Peak LR $\eta_0 \in [1\times 10^{-3}, 3\times 10^{-3}]$, weight decay 0.1, gradient clipping 1.0.
 
-### Memory and Implementation Notes
-- **Attention & Kernels**: bf16 autocast, fused AdamW, SDPA / FlashAttention, gradient checkpointing, and micro-batch size 1 at long context.
-- **Chunked Loss**: Compute loss in chunks over the sequence dimension to avoid instantiating the massive 32k logits tensor in VRAM.
-- **Environment**: If Windows blocks `torch.compile` or FlashAttention (Triton), run training in WSL2 (which has CUDA 12.4 and full Triton/compile support), alerting the user before moving files.
-- **Hyperparameters**: Global batch around 0.25-0.5M tokens (gradient accumulation), peak LR 1e-3 to 3e-3, linear warmup (~1% of steps), then WSD (warmup-stable-decay) or cosine down to ~10% of peak. Weight decay 0.1, grad clip 1.0, tied embeddings.
-- **Logging**: Checkpoint frequently. Log train/val loss every N steps, and sample generations at checkpoints.
-
-### Token budget calculator
-
-Don't guess. **Measure training throughput early**, then plan.
+### Training Throughput Benchmark & Token Budget
+Measure training tokens/sec per finalist at 2k, 8k, and 32k context on the RTX 3070 Ti. Treat unmeasured numbers as guesses.
 
 ```python
 # budget.py
@@ -146,99 +141,99 @@ def count_params(vocab, d, layers, ffn, heads, kv_heads, tied=True):
 def plan(tok_per_sec_measured, hours, params):
     tokens = tok_per_sec_measured * hours * 3600
     return tokens, tokens / params     # total tokens, tokens-per-parameter
-
-if __name__ == "__main__":
-    # Example: fill in measured numbers from a 200-step training benchmark
-    p_total, p_nonemb = count_params(32000, 512, 4, 1536, 8, 2)
-    toks, tpp = plan(tok_per_sec_measured=100_000, hours=12, params=p_total)
-    print(f"params={p_total/1e6:.1f}M  tokens={toks/1e9:.2f}B  tokens/param={tpp:.0f}")
 ```
 
-Rule of thumb: training compute is roughly `6 x params x tokens` FLOPs, and small models on consumer GPUs reach only a modest fraction of peak throughput. **Measure tokens/sec on a 200-step run for each finalist shape** and plug it into the calculator. Treat any figure not measured on this machine as a guess.
+### 1-Hour Finalist Comparison Trials (Short Context, 2k)
+Before committing to the full multi-stage training run:
+1. Train all 4 trial models (Finalist 1, Finalist 2, Finalist 3, and Control) on the identical approved dataset mix, identical 8k tokenizer, and equal wall-clock time (~1 hour each at 2,048 context).
+2. Evaluate held-out validation loss across sources and compare 1-KV vs. 2-KV quality gap.
+3. Plot held-out validation loss vs. decode speed (at 0 and 32k depth).
+4. Review results with the user to select the single winning architecture for the full staged run.
 
-Guidance on how much data to use:
-- The compute-optimal rule is about 20 tokens/param, but small models are best **heavily overtrained** (hundreds to thousands of tokens/param). The best small public models do this.
-- Repeating data for up to about 4 epochs is generally mildly worse than fresh data, not catastrophic. If the high-quality pool is smaller than the token budget, repeat it rather than dilute with low-quality text.
-- Fit as many *fresh, high-quality* tokens as the time budget allows, then repeat.
-
-**Deliverable:** `results/train_throughput.csv`, chosen token budget per finalist.
-
----
-
-## Phase 5: Data source & distillation ablation (Plain CE vs. Teacher-Generated Synthetic)
-
-**Question to answer:** does training on teacher-generated synthetic data (Cosmopedia) beat plain CE on human web text (FineWeb-Edu) under equal wall-clock time?
-
-With the custom 8k SentencePiece tokenizer chosen to maximize decode speed, logit-level KD is dropped for now (revisit logit KD only if the 8k model plateaus). Phase 5 focuses on sequence-level comparison:
-
-### Ablation design
-Train the same finalist shape under equal wall-clock budget (e.g. 1-2 hours):
-- **Run A: Plain CE on filtered human web text** (FineWeb-Edu).
-- **Run B: Plain CE on teacher-generated synthetic text** (Cosmopedia v2 / synthetic stories).
-
-Compare validation loss on held-out sets (both synthetic and natural text), generation coherence, and training throughput.
-
-**Decision rule:** Choose the winning data distribution / ratio for Stage A pretraining.
-
-**Deliverable:** `results/distill_ablation.csv`, loss curves, sample outputs, verdict note.
+**Deliverable:** `results/train_throughput.csv`, 1-hour trial comparison curves, speed vs. val loss Pareto plot, finalist decision note.
 
 ---
 
-## Phase 6: Long-Context Staged Training & Extension Phase
+## Phase 5: Data mixture ablation (Plain CE on Web Text vs. Teacher-Generated Synthetic)
 
-Train and progressively extend context window up to 32k tokens:
+**Question to answer:** Does training on teacher-generated synthetic data (Cosmopedia v2) beat plain CE on human web text (FineWeb-Edu) under equal wall-clock time, and what is the optimal blend?
 
-### Staged Curriculum
-1. **Stage A: Pretraining (about 85-90% of token budget)**
-   - Context: 1024-2048 tokens, standard RoPE base 10,000.
-   - Broad, high-quality mix with LR in the stable phase.
-2. **Stage B: Extend to 8k (about 7-10% of token budget)**
-   - Raise RoPE base (test 500k-1M), continue training at 8k context on genuinely long documents.
-   - Run verification checks below. If they fail, stop, report, and do not start Stage C.
-3. **Stage C: Extend to 32k (about 3-5% of token budget)**
-   - Raise RoPE base again (test 1M-4M), continue training at 32k context on documents that are actually >= 32k tokens.
-   - Run verification checks below.
+Train the chosen winning finalist shape under equal wall-clock budget (1–2 hours):
+- **Run A: Human web text** (`FineWeb-Edu`).
+- **Run B: Synthetic educational text** (`Cosmopedia v2`).
 
-Finalize exact budget splits after measuring training tokens/sec at 2k, 8k, and 32k. Propose the split and report numbers before launching. If Stage C would get too few tokens to take effect, report and propose alternatives.
+### Apples-to-Apples Evaluation Protocol
+To avoid in-distribution evaluation bias (where each model predictably wins on its own training distribution):
+1. **Neutral Common Reference Set**: Evaluate both runs on a held-out dataset that **neither model trained on** (English Wikipedia held-out split).
+2. **Cross-Distribution Evaluation**: Evaluate Run A on held-out Cosmopedia, and Run B on held-out FineWeb-Edu.
+3. **Qualitative Evaluation**: Compare greedy and sampled generations on 20 fixed prompts assessing coherence, factual consistency, and reasoning.
+
+**Decision Rule:** Determine whether pure synthetic, pure web, or an interpolated blend (e.g. 60/40 or 70/30 synthetic/web) achieves the lowest perplexity on the neutral reference set. The winning distribution ratio sets the data blend for Stage A pretraining.
+
+**Deliverable:** `results/distill_ablation.csv`, loss curves on neutral reference set, cross-distribution loss table, generation samples, mixture ratio verdict.
+
+---
+
+## Phase 6: Full staged training run with long-context extension & quality anneal
+
+Execute the full training curriculum on the winning architecture using a multi-stage Warmup-Stable-Decay (WSD) schedule, progressing from short context up to 32k tokens, followed by a quality-upweighted anneal.
+
+### Staged Curriculum & Learning Rate Schedule
+
+Training uses a **WSD-style schedule** so context can be extended without restarting from a decayed LR or shocking weights with a full re-warmup:
+
+```
+LR
+^
+|      [Stage A: 2k Stable]        [Stage B: 8k Stable]     [Stage C1: 32k]
+|      +------------------------+                           +-----+
+|     /                          \                         /       \ [Stage C2: Anneal]
+|    /                            +-----------------------+         \
+|   /  (1% warmup)                (0.7x peak, 0.1% ramp)   (0.5x, 0.1%)\
+|  /                                                                    \---> (0.1x peak)
++--+----------------------------+-------------------------+-------------+---------> Tokens
+   0                          85-90%                    95-97%        100%
+```
+
+1. **Stage A: Foundation Pretraining (85–90% of token budget)**
+   - Context: 1,024–2,048 tokens, RoPE base $\theta = 10{,}000$.
+   - Data: Winning data mix from Phase 5 (Cosmopedia v2 + FineWeb-Edu + TinyStories).
+   - LR Schedule: Linear warmup over first 1% of Stage A steps to peak LR $\eta_0 \in [1.5\times 10^{-3}, 2.5\times 10^{-3}]$, remaining in the **stable flat phase** at $\eta_0$ for the remainder of Stage A.
+   - **No LR decay at the end of Stage A** (preserving plasticity so the model adapts readily to context extension).
+
+2. **Stage B: Long-Context Extension to 8k (7–10% of token budget)**
+   - Context: 8,192 tokens, RoPE base $\theta = 500{,}000$–$1{,}000{,}000$.
+   - Data: Genuinely long documents $\ge 8\text{k}$ tokens (Wikipedia long articles, FineWeb-Edu $\ge 8\text{k}$, arXiv papers, PG-19 books).
+   - LR Schedule: Starts at **$0.7\times \eta_0$** with a brief 0.1% micro-ramp to cushion against attention entropy shock. Does NOT re-warm to full peak $\eta_0$ (which would disrupt learned short-range syntax) and does NOT start from a decayed LR. Remains flat at $0.7\times \eta_0$.
+   - **Verification gate**: Run position-bucket loss and passkey retrieval checks. If checks fail, halt, report, and do not advance to Stage C.
+
+3. **Stage C: Long-Context Extension to 32k & Quality Anneal (3–5% of token budget)**
+   - Context: 32,768 tokens, RoPE base $\theta = 1{,}000{,}000$–$4{,}000{,}000$.
+   - Data: Genuinely long documents $\ge 32\text{k}$ tokens (PG-19 books, arXiv papers $\ge 32\text{k}$; repeat across 2–4 epochs if needed).
+   - **Sub-stage C1 (first 50% of Stage C budget)**: Stable 32k adaptation. LR starts at **$0.5\times \eta_0$** with a 0.1% micro-ramp, held flat while position embeddings and attention heads adjust to 32k context.
+   - **Sub-stage C2 (final 50% of Stage C budget) - Quality Anneal**: LR decays smoothly (cosine decay) down to **$0.1\times \eta_0$**, while shifting the mixture toward the **highest-quality** long-context data (cleanest textbook/educational long-form, select PG-19 chapters). This late-stage anneal locks in sharp loss convergence at the full 32k deployment context.
+
+### LR Schedule Justification
+- Decaying LR during Stage A would freeze weights into a low-learning-rate regime, making RoPE frequency adaptation in Stages B & C sluggish or ineffective.
+- Re-warming back to full peak LR in Stages B or C would destabilize short-range representations already learned in Stage A.
+- Starting extension stages at moderately discounted stable rates ($0.7\times \eta_0$ at 8k, $0.5\times \eta_0$ at 32k) provides sufficient learning capacity to learn long-distance attention distributions without destabilizing short-range features.
+- Placing the sole terminal decay (the quality anneal) at the very end of Stage C delivers maximum quality convergence on both short-range perplexity and long-range coherence simultaneously at the deployment context length.
 
 ### Long-Document Data Strategy
-- FineWeb-Edu documents are mostly short (< 2k tokens). First compute the token length distribution across candidate datasets and measure available tokens at $\ge 8\text{k}$ and $\ge 32\text{k}$ lengths.
-- Genuine long-form sources to consider:
-  - Wikipedia long articles
-  - Public-domain books (e.g. PG-19, Project Gutenberg)
-  - ArXiv / scientific long-form papers
-  - Other long-form open corpora
-- Verify availability and licenses for each source before downloading.
-- Never pack unrelated short documents together as a substitute for long context without explicitly reporting it (keep any packing to a minimum). If long-form data is insufficient for Stage C, repeat long documents across a few epochs and report the repetition count.
+- FineWeb-Edu and Wikipedia have **0 documents $\ge 32\text{k}$ tokens**. PG-19 is the sole large public-domain corpus with continuous documents $\ge 32\text{k}$ tokens (1.86B tokens), supplemented by long arXiv papers (132M tokens $\ge 32\text{k}$).
+- **No document packing without disclosure**: Do not pack unrelated short documents together as a substitute for long context without explicitly reporting it. For Stage C, repeating genuinely long documents for 2–4 epochs is preferred over synthetic concatenation.
 
-### Evaluation Protocol (run after Stage A, Stage B, and Stage C)
-1. **Validation loss by position buckets:** Measure held-out perplexity across token buckets: `[0-1k]`, `[1-2k]`, `[2-4k]`, `[4-8k]`, `[8-16k]`, and `[16-32k]` on long documents.
-2. **Passkey / Needle Retrieval Accuracy:** Evaluate needle-in-a-haystack retrieval at 1k, 2k, 4k, 8k, 16k, and 32k context depths (at least 20 trials per depth with needle inserted at varied depth percentages).
-3. **Success Criteria:** A flat loss curve across position buckets and non-trivial passkey accuracy count as success for that length. Report the longest context depth where it genuinely works.
+### Evaluation Protocol (run after Stages A, B, and C)
+1. **Validation loss by token position bucket**: Held-out perplexity across buckets: `[0-1k]`, `[1-2k]`, `[2-4k]`, `[4-8k]`, `[8-16k]`, and `[16-32k]` on held-out long documents.
+2. **Passkey / Needle Retrieval Accuracy**: Needle-in-a-haystack retrieval at 1k, 2k, 4k, 8k, 16k, and 32k context depths (at least 20 trials per depth with needle inserted at varied depth percentages).
+3. **Success Criteria**: Flat loss curve across position buckets and non-trivial passkey accuracy count as success for that length. Report the longest context depth where it genuinely succeeds.
 
-### Export and Long-Context Speed Verification
-- Confirm GGUF export encodes the extended RoPE base and context length so llama.cpp runs correctly at 32k (`-c 32768`).
-- Verify that perplexity / passkey retrieval in llama.cpp matches PyTorch results.
-- Benchmark final trained, quantized models at depths 0, 8k, 16k, and 32k.
+### Export & Long-Context Speed Verification
+1. Export final PyTorch checkpoint to GGUF; verify metadata encodes context length 32,768 and extended RoPE base.
+2. Verify llama.cpp perplexity and passkey retrieval match PyTorch results at 32k context.
+3. Benchmark final model in llama.cpp at depths 0, 8k, 16k, and 32k with 5 repetitions and error bars.
 
-**Deliverable:** Stage checkpoints, position-bucket loss curves, `results/long_context_eval.csv`, passkey accuracy table.
-
----
-
-## Phase 6: Final training run (staged curriculum)
-
-1. **Stage 1: Foundation (about 60-70% of budget).** Broad, high-quality mix appropriate to model size (see Phase 2), with the LR in the stable phase.
-2. **Stage 2: Anneal (about 20-30% of budget).** Decay the LR while shifting the mixture toward the **highest-quality** data (Cosmopedia, cleanest FineWeb-Edu shards, and any code/math you chose). Late-stage quality upweighting reliably helps small models.
-3. Use the winning method from Phase 5 (CE or distillation).
-4. Keep a rolling checkpoint and sample generations at each stage. If val loss is still improving at the end, extend the stable phase (this is why WSD) and re-decay.
-5. Run the train-time speed sanity check at the end (see Phase 7).
-
-**Evaluation (quality):**
-- Primary: held-out **validation loss/perplexity** per source.
-- Secondary: 20 fixed prompts with generations saved for eyeballing coherence.
-- Optional: `lm-evaluation-harness` on HellaSwag/ARC-Easy/PIQA. Models this small may sit near chance on several tasks, so don't over-read them.
-
-**Deliverable:** final checkpoint, loss curves, `results/quality.csv`, sample outputs.
+**Deliverables:** Stage checkpoints, position-bucket loss curves, `results/long_context_eval.csv`, passkey accuracy table, `results/quality.csv`.
 
 ---
 
