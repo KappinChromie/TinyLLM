@@ -1,0 +1,13 @@
+================================================================================
+ FINAL DOCUMENT-LEVEL TRAIN / VALIDATION OVERLAP AUDIT (ALL ZERO PASS)
+================================================================================
+
+       Validation Set Training Reference Set  Final Val Docs  Final Val Tokens  Document Overlap           Status
+ val_fineweb_edu_long      train_fineweb_edu            1285          20738940                 0 PASS (0 overlap)
+      val_fineweb_edu      train_fineweb_edu           71897         107056933                 0 PASS (0 overlap)
+       val_cosmopedia       train_cosmopedia          111217         118972941                 0 PASS (0 overlap)
+val_wikipedia_neutral   train_wikipedia_long           12000          19350169                 0 PASS (0 overlap)
+   val_wikipedia_long   train_wikipedia_long            1086           9840072                 0 PASS (0 overlap)
+        val_pg19_long        train_pg19_long             100          15178124                 0 PASS (0 overlap)
+      val_tinystories      train_tinystories           15389           3891039                 0 PASS (0 overlap)
+

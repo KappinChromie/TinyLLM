@@ -1,0 +1,13 @@
+================================================================================
+ DOCUMENT-LEVEL TRAIN / VALIDATION OVERLAP AUDIT REPORT
+================================================================================
+
+              Val Set            Train Set  Val Docs  Train Docs Audited  Overlap Count                                Status
+ val_fineweb_edu_long    train_fineweb_edu      1301             1382250             16                                  FAIL
+      val_fineweb_edu    train_fineweb_edu     72732             1382250            861                                  FAIL
+       val_cosmopedia     train_cosmopedia    112834             2144844           2007                                  FAIL
+val_wikipedia_neutral train_wikipedia_long     12000               20612              0                      PASS (0 overlap)
+   val_wikipedia_long train_wikipedia_long      1086               20612              0                      PASS (0 overlap)
+        val_pg19_long      train_pg19_long       100                5176              0                      PASS (0 overlap)
+      val_tinystories    train_tinystories     21990             2119719           6601 FLAG (6601 overlap in upstream split)
+
