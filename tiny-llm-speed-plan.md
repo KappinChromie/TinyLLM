@@ -162,9 +162,22 @@ def plan(tok_per_sec_measured, hours, params):
 
 ## Phase 5: 1-Hour Finalist Trials & Data Mixture Ablation
 
-Phase 5 is divided into two sequential steps:
-1. **Phase 5A: Architecture Selection Trials** — train all 4 candidate shapes on the default Stage A mix to select the winning architecture.
-2. **Phase 5B: Data Mixture Ablation** — on the approved winning architecture, evaluate synthetic vs. web text to determine the optimal Stage A data blend.
+Phase 5 is divided into sequential evaluation steps:
+1. **Phase 5A: Architecture Selection Initial Trials (1-Hour)** — trained all 4 candidate shapes on the default Stage A mix. Revealed that while 4L led at 1 hour wall-clock, 6L led at 220M iso-tokens by 0.095 CE (~12.5x the validation noise floor), requiring a longer head-to-head.
+2. **Phase 5A Extended: Sanity Checks & 3-Hour Head-to-Head (`4L_768H_1KV` vs `6L_768H_1KV`)**:
+   - **Step 1 Sanity Checks (Completed)**:
+     - *Logits KV Cache Parity*: Incremental cached generation matches full parallel pass (max diff $9.54\times 10^{-6}$ f32, 100% argmax agreement).
+     - *GGUF & llama.cpp Export Parity*: Exported to GGUF, verified RoPE ($\theta=10{,}000$, dim=64), vocab (8,192), 1 KV head; llama.cpp greedy output matches PyTorch 100.0% token-for-token.
+     - *TinyStories Grammar Check*: 15-minute training run on TinyStories alone reached validation loss 2.6517 (BPB 1.1703) and generated coherent English story structures, confirming pipeline health.
+     - *Caveat on 1 KV Head*: Quality parity between 1 KV and 2 KV heads is demonstrated at 2k context; long-context retrieval at 8k–32k is untested for 1 KV head and will be validated during Stage B/C passkey tests.
+   - **Step 2 Head-to-Head Protocol (In Progress)**:
+     - 3-hour flat WSD main runs ($\eta_0 = 1\times 10^{-3}$) for `4L_768H_1KV` and `6L_768H_1KV` on Stage A mix (45/45/10), 2k context, batch 65,536 tokens.
+     - Undecayed checkpoints saved at shared token counts: 250M, 500M, and 750M tokens, plus 3-hour wall-clock end (~1.05B tokens for 4L, ~0.75B for 6L).
+     - Equal-token decayed comparisons: From each shared checkpoint (250M, 500M, 750M) and the 3h end, branch an independent 381-step (~25M tokens) cosine decay to $0.1\times \eta_0$. Branch time does not count against the 3-hour main clock.
+     - Full validation suite on 4 clean held-out sets (`val_cosmopedia`, `val_fineweb_edu`, `val_tinystories`, `val_wikipedia_neutral`).
+     - Noise floor reporting: Evaluation gaps are compared against both $\Delta_{\text{val}} = 0.0076$ (validation spread) and $\Delta_{\text{train}} = 0.0254$ (training spread).
+     - Telemetry & Stability: Real-time GPU logging every 60s for temperature, power, and clock throttling; loss divergence monitoring.
+3. **Phase 5B: Data Mixture Ablation** — on hold until the user selects the winning architecture from Step 2 data.
 
 ---
 
