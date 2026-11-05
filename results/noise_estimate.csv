@@ -1,4 +1,4 @@
-seed,lr,steps,elapsed_sec,tokens_seen,train_loss_final,train_loss_min,val_stage_a_loss,val_cosmopedia_loss,val_cosmopedia_bpb,val_fineweb_loss,val_fineweb_bpb,val_tinystories_loss,val_tinystories_bpb,val_wiki_neutral_loss,val_wiki_neutral_bpb,tok_per_sec,peak_vram_mib
-42,0.001,1844,1200.1,120848384,4.478,4.1156,,,,,,,,,,100698.4,4155.4
-43,0.001,1787,1200.6,117112832,4.471,4.1608,4.4587,4.1983,1.7415,4.9702,2.2691,3.3284,1.4689,4.9851,2.5567,97544.5,4154.8
-44,0.001,1864,1200.6,122159104,4.4526,4.1882,4.4663,4.2,1.7422,4.9831,2.275,3.3393,1.4737,4.9729,2.5504,101752.4,4155.4
+seed,lr,steps,elapsed_sec,tokens_seen,train_loss_final,train_loss_min,val_stage_a_loss,val_cosmopedia_loss,val_cosmopedia_bpb,val_fineweb_loss,val_fineweb_bpb,val_tinystories_loss,val_tinystories_bpb,val_wiki_neutral_loss,val_wiki_neutral_bpb,tok_per_sec,peak_vram_mib,training_status
+42,0.001,1844,1200.1,120848384,4.478,4.1156,,,,,,,,,,100698.4,4155.4,pre-fix (double-shift)
+43,0.001,1787,1200.6,117112832,4.471,4.1608,4.4587,4.1983,1.7415,4.9702,2.2691,3.3284,1.4689,4.9851,2.5567,97544.5,4154.8,pre-fix (double-shift)
+44,0.001,1864,1200.6,122159104,4.4526,4.1882,4.4663,4.2,1.7422,4.9831,2.275,3.3393,1.4737,4.9729,2.5504,101752.4,4155.4,pre-fix (double-shift)

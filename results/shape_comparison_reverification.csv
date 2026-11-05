@@ -1,0 +1,3 @@
+model,params_m,val_wiki_ce,val_wiki_bpb,val_cosmo_ce,val_fineweb_ce,val_tinystories_ce,active_train_min,total_wall_min,pauses,active_tok_per_sec,decode_0k_f16,decode_32k_f16
+6L_768H_1KV,42.28,2.9364,1.0338,2.1149,2.8695,1.6175,62.2,83.92,259.0,66997.3,1384.9,1101.2
+4L_768H_1KV,30.28,3.0277,1.0659,2.2214,2.9667,1.6974,42.5,45.77,39.0,98057.0,1660.7,1314.8

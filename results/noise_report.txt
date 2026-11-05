@@ -1,3 +1,4 @@
+[NOTE: PROVISIONAL VALUES - MEASURED PRE-FIX UNDER DOUBLE-SHIFT BUG]
 ================================================================================
  NOISE FLOOR ESTIMATION REPORT (4L_768H_1KV, 20-MIN TRIALS, STAGE A MIX)
 ================================================================================

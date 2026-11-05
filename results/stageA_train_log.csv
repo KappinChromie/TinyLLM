@@ -1,0 +1,3 @@
+step,tokens_m,train_loss,lr,grad_norm,active_tok_s,active_time_min,wall_time_min,paused_time_min,temp_gpu,power_w
+50,13.11,6.1281,1.000000e-03,1.0625,69553.1,3.14,3.16,0.00,80.0,233.9
+100,26.21,5.1499,2.000000e-03,0.9375,69423.8,6.29,6.32,0.00,81.0,234.8

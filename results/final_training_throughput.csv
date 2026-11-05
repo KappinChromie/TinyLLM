@@ -1,0 +1,4 @@
+seq_len,micro_bs,grad_ckpt,active_tok_per_sec,step_time_ms,peak_vram_mb,tokens_per_hour_m
+2048,4,False,74900.0,109.37,4308.0,269.64
+8192,1,False,51324.2,159.61,4444.0,184.77
+32768,1,True,21569.1,1519.21,5715.0,77.65

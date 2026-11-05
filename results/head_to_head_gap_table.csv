@@ -1,9 +1,9 @@
-checkpoint,is_decayed,4L_stage_a_ce,6L_stage_a_ce,delta_ce (6L - 4L),delta_bpb (6L - 4L),delta_wiki_ce,delta_cosmo_ce,delta_fineweb_ce,delta_tinystories_ce,multiple_of_noise_val (0.0076),multiple_of_noise_train (0.0254)
-250M_undecayed,False,4.2141,4.1015,-0.1126,-0.0488,-0.093,-0.1301,-0.0956,-0.1097,14.82,4.43
-250M_decayed,True,4.0881,3.969,-0.1191,-0.0516,-0.0869,-0.1363,-0.1036,-0.1115,15.67,4.69
-500M_undecayed,False,4.0653,3.9376,-0.1277,-0.0553,-0.0832,-0.1477,-0.11,-0.1175,16.8,5.03
-500M_decayed,True,3.9528,3.8238,-0.129,-0.056,-0.0925,-0.1471,-0.1135,-0.1176,16.97,5.08
-750M_undecayed,False,4.0001,3.8666,-0.1335,-0.0579,-0.0819,-0.1529,-0.1157,-0.1258,17.57,5.26
-750M_decayed,True,3.8937,3.7566,-0.1371,-0.0595,-0.1015,-0.1581,-0.1193,-0.1222,18.04,5.4
-3hr_undecayed,False,3.948,3.8571,-0.0909,-0.0394,-0.0679,-0.1036,-0.0797,-0.0837,11.96,3.58
-3hr_decayed,True,3.8475,3.747,-0.1005,-0.0435,-0.0681,-0.1149,-0.0887,-0.0882,13.22,3.96
+checkpoint,is_decayed,4L_stage_a_ce,6L_stage_a_ce,delta_ce (6L - 4L),delta_bpb (6L - 4L),delta_wiki_ce,delta_cosmo_ce,delta_fineweb_ce,delta_tinystories_ce,multiple_of_noise_val (0.0076),multiple_of_noise_train (0.0254),training_status
+250M_undecayed,False,4.2141,4.1015,-0.1126,-0.0488,-0.093,-0.1301,-0.0956,-0.1097,14.82,4.43,pre-fix (double-shift)
+250M_decayed,True,4.0881,3.969,-0.1191,-0.0516,-0.0869,-0.1363,-0.1036,-0.1115,15.67,4.69,pre-fix (double-shift)
+500M_undecayed,False,4.0653,3.9376,-0.1277,-0.0553,-0.0832,-0.1477,-0.11,-0.1175,16.8,5.03,pre-fix (double-shift)
+500M_decayed,True,3.9528,3.8238,-0.129,-0.056,-0.0925,-0.1471,-0.1135,-0.1176,16.97,5.08,pre-fix (double-shift)
+750M_undecayed,False,4.0001,3.8666,-0.1335,-0.0579,-0.0819,-0.1529,-0.1157,-0.1258,17.57,5.26,pre-fix (double-shift)
+750M_decayed,True,3.8937,3.7566,-0.1371,-0.0595,-0.1015,-0.1581,-0.1193,-0.1222,18.04,5.4,pre-fix (double-shift)
+3hr_undecayed,False,3.948,3.8571,-0.0909,-0.0394,-0.0679,-0.1036,-0.0797,-0.0837,11.96,3.58,pre-fix (double-shift)
+3hr_decayed,True,3.8475,3.747,-0.1005,-0.0435,-0.0681,-0.1149,-0.0887,-0.0882,13.22,3.96,pre-fix (double-shift)

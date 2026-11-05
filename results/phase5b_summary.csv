@@ -1,0 +1,5 @@
+run_id,run_name,total_tokens_m,total_time_min,tok_per_sec,final_train_loss,val_wiki_ce,val_wiki_bpb,val_cosmo_ce,val_cosmo_bpb,val_fineweb_ce,val_fineweb_bpb,val_tinystories_ce,val_tinystories_bpb,micro_bs,grad_accum,total_wall_min,active_train_min,total_paused_min,num_pauses,active_tok_per_sec
+Run_A,100% FineWeb-Edu,250.01984,57.99501543442408,71850.95653686006,2.7692313194274902,2.8349,0.998,2.8724,0.9988,2.7818,0.9657,3.0167,1.3516,8.0,4.0,58.0,58.0,0.0,0.0,71851.0
+Run_B,100% Cosmopedia v2,250.01984,,,2.0203,3.3572,1.1819,2.0084,0.6983,3.3926,1.1777,2.6202,1.174,4.0,8.0,90.69,62.27,28.42,339.0,66919.2
+Run_C,"Default Blend (45% Cosmo, 45% FW-Edu, 10% Tiny)",250.01984,,,2.4312,2.9364,1.0338,2.1149,0.7354,2.8695,0.9961,1.6175,0.7247,4.0,8.0,83.92,62.2,21.72,259.0,66997.3
+Run_D,"Simpler-Text Blend (40% Tiny, 40% Cosmo, 20% FW-Edu)",250.01984,,,1.9768,3.0433,1.0714,2.1608,0.7513,2.9948,1.0396,1.3661,0.6121,4.0,8.0,88.34,57.21,31.13,371.0,72835.5

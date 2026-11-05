@@ -1,0 +1,4 @@
+run_id,peak_lr,total_tokens_m,active_min,wall_min,paused_min,pauses,active_tok_per_sec,final_train_loss,val_wiki_ce,val_wiki_bpb,val_cosmo_ce,val_cosmo_bpb,val_fineweb_ce,val_fineweb_bpb,val_tinystories_ce,val_tinystories_bpb
+LR_5e-04,0.0005,149.95,33.63,40.68,7.04,84,74306.6,3.0516,3.6588,1.2881,2.9109,1.0122,3.4712,1.205,2.1798,0.9766
+LR_1e-03,0.001,149.95,33.87,41.75,7.88,94,73783.8,2.8092,3.2936,1.1595,2.6667,0.9273,3.2112,1.1147,2.0005,0.8963
+LR_2e-03,0.002,149.95,34.6,42.1,7.49,89,72223.3,2.767,3.2631,1.1488,2.613,0.9086,3.1795,1.1037,1.9434,0.8707

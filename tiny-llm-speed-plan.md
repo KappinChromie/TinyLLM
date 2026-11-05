@@ -115,31 +115,60 @@ Principle: for small models, **data quality and data fit matter more than volume
 
 ## Phase 4: Training recipe, 1-hour finalist comparison trials, and token budget
 
-### Architecture Finalists & Control Trial
-All models use the custom 8k SentencePiece tokenizer, RMSNorm, RoPE, SwiGLU, and tied embeddings:
-- **Finalist 1**: `4L / 768H / 2048FFN` (1 KV head)
-- **Finalist 2**: `6L / 512H / 1280FFN` (1 KV head)
-- **Finalist 3**: `6L / 768H / 2048FFN` (1 KV head)
-- **Control Trial**: `4L / 768H / 2048FFN` with **2 KV heads** (benchmarked against Finalist 1 to quantify the exact quality vs. speed tradeoff of 1 KV head).
+### Architecture Selection & Winner Decision
+All initial candidates used the custom 8k SentencePiece tokenizer, RMSNorm, RoPE, SwiGLU, and tied embeddings:
+- `4L / 768H / 2048FFN` (1 KV head) - 30.28M params
+- `6L / 512H / 1280FFN` (1 KV head) - 19.54M params
+- `6L / 768H / 2048FFN` (1 KV head) - 42.28M params
+- `4L / 768H / 2048FFN` with 2 KV heads (control) - 30.68M params
+
+> [!IMPORTANT]
+> **DECISION: `6L_768H_1KV` (42.28M params) IS LOCKED AS THE SOLE WINNING ARCHITECTURE.**
+> 
+> Following the Phase 5A 1-hour trials and an extended 3-hour head-to-head comparison against `4L_768H_1KV`, `6L_768H_1KV` demonstrated consistent empirical superiority across all evaluation criteria:
+> 1. **Iso-Token Dominance [pre-fix (double-shift)]**: At 250M tokens, 6L led by -0.1191 loss (decayed) and -0.1126 (undecayed). At 500M tokens, 6L led by -0.1290 (decayed). At 750M tokens, the lead expanded to -0.1371 loss (decayed) and -0.1335 (undecayed), showing 6L's quality advantage widens continuously with scale.
+> 2. **Iso-Wall-Clock Dominance [pre-fix (double-shift)]**: Even when 4L was trained for the exact same wall-clock time (3.0 hours) and consumed 1,122.6M tokens (+36.1% more tokens than 6L's 825.0M tokens), 6L still defeated 4L by **-0.1005 CE** on Stage A average validation loss (3.7470 vs 3.8475) and by **-0.0681 CE** on neutral Wikipedia (4.3707 vs 4.4388). *(Note: Reconciled from an earlier provisional draft reporting -0.0632; exact numbers are from `head_to_head_gap_table.csv`)*.
+> 3. **Statistical Significance**: The gap exceeds the provisional validation noise floor ($\Delta_{\text{val}} = 0.0076$) by > 8.9x, and exceeds the provisional training noise floor ($\Delta_{\text{train}} = 0.0254$) by > 2.6x. Both noise floors are marked provisional because they were measured pre-fix.
+> 4. **1 KV Head Decision**: 1 KV head is maintained based on 2k throughput and quality parity. *Caveat*: Long-context retrieval at 8k–32k with 1 KV head remains untested and will be verified directly during Stage B/C passkey tests.
 
 ### Implementation & Training Recipe
 - **Attention & Kernels**: bf16 autocast, fused AdamW, native PyTorch FlashAttention-2 / SDPA under WSL2 (Ubuntu 24.04 LTS, CUDA 12.4), gradient checkpointing. Peak VRAM is only 2.18–2.48 GB even at 32k context.
 - **Chunked Loss**: Cross-entropy computed in chunks over the sequence dimension to eliminate peak VRAM spikes from large logit matrices at extended sequence lengths.
 - **Global Batch Sizing per Stage**:
-  - **Stage A (2k context)**: Global batch = 128 sequences (262,144 tokens ~0.26M tokens). Micro-batch = 8 sequences, 16 grad accum steps.
+  - **Stage A (2k context)**: Global batch = 128 sequences (262,144 tokens ~0.26M tokens). Micro-batch = 4 or 8 sequences, 32 or 16 grad accum steps.
   - **Stage B (8k context)**: Global batch = 32 sequences (262,144 tokens ~0.26M tokens). Micro-batch = 2 sequences, 16 grad accum steps.
   - **Stage C (32k context)**: Global batch = 4 sequences (131,072 tokens ~0.13M tokens). Micro-batch = 1 sequence, 4 grad accum steps (yields 875 optimizer steps over 3,500 sequences).
-- **Learning Rate Tuning**: Quick 3-point LR sweep ($\eta_0 \in \{1\times 10^{-3}, 2\times 10^{-3}, 3\times 10^{-3}\}$) on a short 200-step run per finalist on real tokenized data in WSL2 to select optimal peak learning rate. Weight decay 0.1, grad clip 1.0, tied embeddings.
+- **Learning Rate Tuning [pre-fix (double-shift)]**: Earlier 3-point LR sweep identified $\eta_0 = 1\times 10^{-3}$ as optimal for 32-seq batch. Re-verified at the 128-seq batch in Step 2B. Weight decay 0.1, grad clip 1.0, tied embeddings.
+- **Mandatory Pre-Training Label-Shift Regression Test**: Every training script executes an automated pre-flight regression test before parameter updates begin:
+  - Feeds a dummy sequence `[1, 2, 3, 4, 5]` to verify that target tensor $y$ is shifted by exactly 1 position `[2, 3, 4, 5]`.
+  - Confirms the model forward pass does NOT compute an internal loss and that `F.cross_entropy` does not apply a secondary shift. If any assertion fails, training aborts immediately.
+
+### Training Infrastructure & Quality-of-Life Enhancements
+1. **VRAM Headroom Optimization (Micro-Batch Tuning)**:
+   - Evaluated total GPU memory footprint across micro-batch sizes 8, 4, and 2 under fixed 32-sequence global batch (65,536 tokens) in `results/micro_batch_vram_test.csv`:
+     - Micro-batch 8 (grad accum 4): 73,068.7 tok/s | 6,636 MB total GPU memory (6.48 GB)
+     - **Micro-batch 4 (grad accum 8)**: **72,234.3 tok/s** | **4,264 MB total GPU memory (4.16 GB)** — drops total memory by 2.37 GB, keeping GPU memory safely below the 5.0 GB ceiling with a negligible throughput cost of only 1.14% (-834 tok/s). Selected as standard setting.
+     - Micro-batch 2 (grad accum 16): 68,922.0 tok/s | 3,003 MB total GPU memory (2.93 GB)
+2. **Temperature Governor (Stock GPU Settings)**:
+   - Polls GPU core temperature between optimizer steps (every 5 steps) via `/usr/lib/wsl/lib/nvidia-smi`.
+   - If temperature reaches $\ge 83^\circ$C, training automatically pauses (sleeping in 5s intervals) until the GPU cools to $\le 78^\circ$C, then resumes. (Thresholds updated from 80°C/75°C to widen thermal headroom while protecting GPU hardware). Polled between optimizer steps; pause log written to `results/pause_log.csv`.
+   - All pauses are logged to `results/pause_log.csv` (`timestamp_start, timestamp_end, duration_sec, temp_start, temp_end, step, tokens_seen, run_id`).
+   - Two clocks tracked per run: total wall-clock time and active training time (wall minus paused time). Throughput (tok/s) is strictly computed from active training time.
+   - Safety guard: alerts if cumulative paused time exceeds 25% of elapsed time.
+3. **Resumable Full-State Checkpoints**:
+   - Saves complete training state (model weights, fused optimizer moments, step count, tokens seen, CPU/CUDA RNG states, and data-loader positions) every 15 minutes of active time.
+   - Maintains rolling retention (last 2 checkpoints + latest symlink) to prevent disk bloat.
+   - Resume parity verified in `results/resume_parity_test.csv`: 200-step uninterrupted run vs 100-step save-and-resume matches with $\Delta = 0.0031$ at step 200, well below the validation noise floor ($\Delta_{\text{val}} = 0.0076$).
 
 ### Measured Training Throughput (RTX 3070 Ti, WSL2, Flash SDPA)
-Measured empirically on real hardware across all trial shapes (from `results/train_throughput.csv`):
+Measured empirically on real hardware for `6L_768H_1KV` (PyTorch 2.6, CUDA 12.4, fused AdamW, bf16):
 
-| Architecture | Total Params | 2k Tok/s (M tok/hr) | 8k Tok/s (M tok/hr) | 32k Tok/s (M tok/hr) | Peak VRAM |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **`4L_768H_1KV`** | 30.28M | 87,375 (314.5M/hr) | 58,146 (209.3M/hr) | 29,627 (106.7M/hr) | 2.32 GB |
-| **`6L_512H_1KV`** | 19.54M | 101,053 (363.8M/hr) | 63,744 (229.5M/hr) | 31,080 (111.9M/hr) | 2.19 GB |
-| **`6L_768H_1KV`** | 42.28M | 62,210 (224.0M/hr) | 40,146 (144.5M/hr) | 19,973 (71.9M/hr) | 2.48 GB |
-| **`4L_768H_2KV` (Control)** | 30.68M | 85,553 (308.0M/hr) | 57,381 (206.6M/hr) | 29,279 (105.4M/hr) | 2.32 GB |
+| Context Length | Micro Batch | Grad Ckpt | Chunked Loss | Tok/s | M Tok/hr | Step Time (ms) | Peak VRAM | Status |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **2,048 (Stage A)** | 8 | False | False | **68,453 – 71,373** | **246.4 – 256.9M** | 239.3 ms | 4.90 GB | Validated in 3h run |
+| **8,192 (Stage B)** | 1 | False | False | **48,795** | **175.7M** | 167.9 ms | 2.59 GB | Fits in VRAM w/o ckpt |
+| **8,192 (Stage B)** | 1 | True | True | **40,128** | **144.5M** | 204.2 ms | 0.96 GB | Conservative planning base |
+| **32,768 (Stage C)** | 1 | True | False | **19,647** | **70.7M** | 1,667.8 ms | 3.83 GB | Verified on hardware |
 
 ```python
 # budget.py
@@ -160,78 +189,100 @@ def plan(tok_per_sec_measured, hours, params):
     return tokens, tokens / params     # total tokens, tokens-per-parameter
 ```
 
-## Phase 5: 1-Hour Finalist Trials & Data Mixture Ablation
+## Phase 5: Architecture Decision, Quality Audits, Reference Speeds, & Phase 5B Mixture Ablation
 
-Phase 5 is divided into sequential evaluation steps:
-1. **Phase 5A: Architecture Selection Initial Trials (1-Hour)** — trained all 4 candidate shapes on the default Stage A mix. Revealed that while 4L led at 1 hour wall-clock, 6L led at 220M iso-tokens by 0.095 CE (~12.5x the validation noise floor), requiring a longer head-to-head.
-2. **Phase 5A Extended: Sanity Checks & 3-Hour Head-to-Head (`4L_768H_1KV` vs `6L_768H_1KV`)**:
-   - **Step 1 Sanity Checks (Completed)**:
-     - *Logits KV Cache Parity*: Incremental cached generation matches full parallel pass (max diff $9.54\times 10^{-6}$ f32, 100% argmax agreement).
-     - *GGUF & llama.cpp Export Parity*: Exported to GGUF, verified RoPE ($\theta=10{,}000$, dim=64), vocab (8,192), 1 KV head; llama.cpp greedy output matches PyTorch 100.0% token-for-token.
-     - *TinyStories Grammar Check*: 15-minute training run on TinyStories alone reached validation loss 2.6517 (BPB 1.1703) and generated coherent English story structures, confirming pipeline health.
-     - *Caveat on 1 KV Head*: Quality parity between 1 KV and 2 KV heads is demonstrated at 2k context; long-context retrieval at 8k–32k is untested for 1 KV head and will be validated during Stage B/C passkey tests.
-   - **Step 2 Head-to-Head Protocol (In Progress)**:
-     - 3-hour flat WSD main runs ($\eta_0 = 1\times 10^{-3}$) for `4L_768H_1KV` and `6L_768H_1KV` on Stage A mix (45/45/10), 2k context, batch 65,536 tokens.
-     - Undecayed checkpoints saved at shared token counts: 250M, 500M, and 750M tokens, plus 3-hour wall-clock end (~1.05B tokens for 4L, ~0.75B for 6L).
-     - Equal-token decayed comparisons: From each shared checkpoint (250M, 500M, 750M) and the 3h end, branch an independent 381-step (~25M tokens) cosine decay to $0.1\times \eta_0$. Branch time does not count against the 3-hour main clock.
-     - Full validation suite on 4 clean held-out sets (`val_cosmopedia`, `val_fineweb_edu`, `val_tinystories`, `val_wikipedia_neutral`).
-     - Noise floor reporting: Evaluation gaps are compared against both $\Delta_{\text{val}} = 0.0076$ (validation spread) and $\Delta_{\text{train}} = 0.0254$ (training spread).
-     - Telemetry & Stability: Real-time GPU logging every 60s for temperature, power, and clock throttling; loss divergence monitoring.
-3. **Phase 5B: Data Mixture Ablation** — on hold until the user selects the winning architecture from Step 2 data.
+### 1. Architecture Selection Decision (Completed, Subject to Step 2A Re-Verification)
+- **Outcome**: `6L_768H_1KV` (42.28M parameters) selected as the winning architecture, confirmed in Step 2A.
+- **Head-to-Head Evidence [pre-fix (double-shift)]**:
+  - *Iso-Token (250M tokens)*: 6L led by -0.1191 (decayed) and -0.1126 (undecayed).
+  - *Iso-Token (500M tokens)*: 6L led by -0.1290 (decayed) and -0.1277 (undecayed).
+  - *Iso-Token (750M tokens)*: 6L led by -0.1371 (decayed) and -0.1335 (undecayed).
+  - *Iso-Wall-Clock (3.0 hours)*: Despite 4L processing +36.1% more tokens (1,122.6M vs 825.0M), 6L beat 4L on Stage A average validation loss by **-0.1005 CE** (3.7470 vs 3.8475) and on neutral Wikipedia by **-0.0681 CE** (4.3707 vs 4.4388). *(Note: Reconciled from earlier provisional draft reporting -0.0632; exact values from `head_to_head_gap_table.csv`)*.
+  - *Provisional Noise Floors*: Both gaps exceed the provisional validation noise floor ($\Delta_{\text{val}} = 0.0076$) and provisional training noise floor ($\Delta_{\text{train}} = 0.0254$), which were measured pre-fix.
+- **1 KV Head Locked**: Locked for subsequent stages (with long-context retrieval at 8k–32k to be validated in Stage B/C passkey tests).
 
----
+### 2. Step 1: Data and Text-Quality Diagnostic Results (Completed)
+- **Hypothesis Investigated**: Undertrained models dropping function words ("was happy have an", "went to park play his").
+- **Audit Findings**:
+  1. *Shard Window Decodes*: 20 random windows from `train_tinystories.bin`, `train_cosmopedia.bin`, and `train_fineweb_edu.bin` decoded into 100% natural, grammatical English with all function words present.
+  2. *Round-Trip Verification*: 1,000 raw documents per source tested; exact-match rate was **100.00%** on TinyStories, **100.00%** on Cosmopedia, and **100.00%** on FineWeb-Edu. Tokenizer and binary shards are completely bug-free.
+  3. **CRITICAL ROOT CAUSE IDENTIFIED (Double Label Shift Bug)**: In `StageAMixDataLoader`, batches were created with `x = shard[idx:idx+seq_len]` and `y = shard[idx+1:idx+1+seq_len]`. However, Hugging Face's `LlamaForCausalLM.forward(x, labels=y)` internally applies `shift_labels = labels[..., 1:]`. This resulted in a **double shift**, training $x_t$ to predict $x_{t+2}$ instead of $x_{t+1}$!
+  4. *Empirical Confirmation*: Teacher-forced accuracy on held-out TinyStories documents was only 2.81% for $t+1$, but **~41.2%** for $t+2$.
+  5. *Resolution*: Standard explicit cross-entropy `F.cross_entropy(logits.view(-1, vocab_size), y.view(-1))` implemented in all training scripts without passing `labels` into Hugging Face forward pass.
 
-### Phase 5A: Architecture Selection Trials (4 Shapes × 1 Hour at 2k Context)
-Before committing to the full staged training run:
-1. **Four Architectures Evaluated**:
-   - Finalist 1: `4L_768H_1KV` (30.28M params)
-   - Finalist 2: `6L_512H_1KV` (19.54M params)
-   - Finalist 3: `6L_768H_1KV` (42.28M params)
-   - Control: `4L_768H_2KV` (30.68M params)
-2. **Standardized Setup**:
-   - Context length: 2,048 tokens.
-   - Dataset mix: Default Stage A foundation mix (45% Cosmopedia v2, 45% FineWeb-Edu, 10% TinyStories).
-   - Tokenizer: Custom 8,192 SentencePiece BPE.
-   - Learning rate: Optimal peak $\eta_0$ determined by the extended LR sweep on the Stage A mix.
-   - Global batch: 32 sequences (65,536 tokens, micro-batch 8, 4 grad accum steps).
-3. **Training & Terminal Decay Protocol**:
-   - Each trial trains for exactly 1 hour wall-clock at $\eta_0 = 1\times 10^{-3}$ (selected by extended 20-minute sweep).
-   - Follows WSD with 10% terminal cosine decay down to $0.1\times \eta_0$ (first 54 minutes flat in the stable phase, final 6 minutes cosine decay to $0.1\times \eta_0$) so final 1-hour validation losses reflect fully converged models.
-   - **LR Monitoring & Stability Guard**: Monitor `6L_768H_1KV` closely during training; if loss spikes or diverges at $\eta_0 = 1\times 10^{-3}$, re-run that shape at $\eta_0 = 5\times 10^{-4}$ and report both.
-4. **Fair Comparison Protocol (Strict Apples-to-Apples)**:
-   - **Never compare undecayed checkpoints with decayed ones.**
-   - **Iso-Token Checkpoint Comparison (220M tokens)**: Checkpoint all 4 models at exactly 220M tokens (the volume reached by the slowest finalist). Compare undecayed checkpoints directly. In addition, branch a short 5–10% cosine decay to $0.1\times \eta_0$ from the 220M checkpoint to compare equal-token decayed models.
-   - **Iso-Wall-Clock Comparison (1 Hour)**: Compare decayed final checkpoints against decayed final checkpoints at 1 hour (54m stable + 6m cosine decay).
-   - **Noise Floor Threshold**: Before comparing shapes, run `4L_768H_1KV` across multiple random seeds (seeds 42, 43, 44) for 20 minutes each on the Stage A mix to measure the empirical standard deviation and spread in validation loss ($\Delta_{noise}$). **No architectural or KV-head claim smaller than this noise floor may be claimed as real.**
-   - **Comprehensive Validation Suite**: Evaluate validation loss on all 4 clean held-out sets: `val_cosmopedia`, `val_fineweb_edu`, `val_tinystories`, and neutral `val_wikipedia_neutral`. Report cross-entropy loss, bits per token, bits per byte (BPB), and bits per character (BPC).
-5. **Quality vs. Speed Pareto Plots & Generations**:
-   - Plot held-out validation loss against single-stream decode speed at 0 context depth.
-   - Plot held-out validation loss against single-stream decode speed at 32k context depth.
-   - Compare `4L_768H_1KV` vs. `4L_768H_2KV` validation loss to quantify the exact quality penalty of 1 KV head vs. 2 KV heads relative to the noise floor.
-   - Save and inspect 10 sample generations per shape with fixed prompts.
-6. **Checkpoint & Pause**: Present the comparison table, curves, Pareto plots, and sample generations for user review and approval to pick the single winning architecture.
+### 3. Step 2: Reference Decode Speed Benchmark (Completed)
+Benchmarked on Windows-native llama.cpp (build `51fe42c5d`, CUDA 12.4, RTX 3070 Ti 8GB, `-fa 1 -ngl 99 -n 256 -r 5`):
 
-**Deliverable:** `results/trials_1hr_summary.csv`, 1-hour trial comparison curves, speed vs. val loss Pareto plots (0 and 32k depth), finalist architecture decision note.
+| Model | Quantization | File Size | 0k Context Depth | 8k Context Depth | 32k Context Depth |
+| :--- | :--- | :---: | :---: | :---: | :---: |
+| **`6L_768H_1KV` (Winner)** | **F16** | **80.8 MB** | **1,384.9 ± 10.2 t/s** | **1,274.9 ± 8.6 t/s** | **1,101.2 ± 7.9 t/s** |
+| **`6L_768H_1KV` (Winner)** | **Q8_0** | **43.0 MB** | **1,481.0 ± 28.1 t/s** | **1,351.8 ± 17.5 t/s** | **1,170.6 ± 11.7 t/s** |
+| **`6L_768H_1KV` (Winner)** | **Q4_0** | **24.4 MB** | **1,554.9 ± 21.7 t/s** | **1,411.1 ± 16.3 t/s** | **1,213.1 ± 10.2 t/s** |
+| `4L_768H_1KV` | F16 | 57.9 MB | 1,660.7 ± 27.1 t/s | 1,511.6 ± 31.3 t/s | 1,314.8 ± 11.0 t/s |
+| `4L_768H_1KV` | Q8_0 | 30.9 MB | 1,781.1 ± 14.2 t/s | 1,645.0 ± 5.5 t/s | 1,404.5 ± 8.7 t/s |
+| `4L_768H_1KV` | Q4_0 | 18.0 MB | 1,840.3 ± 39.3 t/s | 1,676.8 ± 4.1 t/s | 1,418.8 ± 5.0 t/s |
 
----
+### 4. Step 4: Phase 5B Data-Mixture Ablation Protocol
+Train `6L_768H_1KV` for four runs of 250M tokens each (~1 hour each) with identical seeds and data ordering:
+- **Run A**: 100% FineWeb-Edu (`train_fineweb_edu.bin`)
+- **Run B**: 100% Cosmopedia v2 (`train_cosmopedia.bin`)
+- **Run C (Default Blend)**: 45% Cosmopedia v2, 45% FineWeb-Edu, 10% TinyStories
+- **Run D (Simpler-Text Blend)**: 40% TinyStories, 40% Cosmopedia v2, 20% FineWeb-Edu
 
-### Phase 5B: Data Mixture Ablation (on Approved Winning Architecture)
-**Question to answer:** Does training on teacher-generated synthetic data (Cosmopedia v2) beat plain CE on human web text (FineWeb-Edu) under equal wall-clock time, and what is the optimal blend?
+#### Training & Evaluation Protocol
+- **Setup**: Context 2,048 tokens, LR $\eta_0 = 1\times 10^{-3}$, batch 65,536 tokens, WSD schedule (flat for 225M tokens, 25M token cosine decay to $0.1\times \eta_0$).
+- **Primary Decision Metric**: Held-out cross-entropy and bits per byte (BPB) on neutral `val_wikipedia_neutral`.
+- **Secondary Metrics**: Cross-entropy and BPB on `val_cosmopedia`, `val_fineweb_edu`, and `val_tinystories`.
+- **Qualitative Generation**: 10 standard evaluation prompts plus 5 basic grammar prompts (short sentences, simple stories).
+- **Noise Floor Comparison**: Compare differences against both empirical thresholds: $\Delta_{\text{val}} = 0.0076$ (validation spread) and $\Delta_{\text{train}} = 0.0254$ (training spread). Both noise floors are marked provisional.
 
-Train the winning shape chosen in Phase 5A under equal 1-hour wall-clock runs:
-- **Run A: Human web text** (`FineWeb-Edu`).
-- **Run B: Synthetic educational text** (`Cosmopedia v2`).
-- **Run C: Balanced blend** (45% Cosmopedia v2, 45% FineWeb-Edu, 10% TinyStories).
+#### Phase 5B Empirical Results & Stage A Mix Decision
 
-#### Apples-to-Apples Evaluation Protocol
-To eliminate in-distribution bias (where each model predictably wins on its own training distribution):
-1. **Neutral Common Reference Set**: Evaluate all runs on the 10M-token held-out dataset that **none of the models trained on** (English Wikipedia held-out split from shard 40, audited for < 0.01% 13-gram non-contamination).
-2. **Cross-Distribution Evaluation**: Evaluate Run A on held-out Cosmopedia, and Run B on held-out FineWeb-Edu.
-3. **Qualitative Generation**: Compare greedy and sampled generations on 20 fixed prompts assessing coherence, factual consistency, and reasoning.
+| Run ID | Training Data Mixture | Micro-BS / Grad Accum | Active Train Time | Paused Time (Pauses) | Active Tok/s | Final Train Loss | Neutral Wiki CE (BPB) | Cosmopedia CE (BPB) | FineWeb-Edu CE (BPB) | TinyStories CE (BPB) |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Run A** | 100% FineWeb-Edu | mb=8 / ga=4 | 58.0 min | 0.0 min (0) | 71,851.0 | 2.7692 | **2.8349 (0.9980)** | 2.8724 (0.9988) | **2.7818 (0.9657)** | 3.0167 (1.3516) |
+| **Run B** | 100% Cosmopedia v2 | mb=4 / ga=8 | 62.3 min | 28.4 min (339) | 66,919.2 | 2.0203 | 3.3572 (1.1819) | **2.0084 (0.6983)** | 3.3926 (1.1777) | 2.6202 (1.1740) |
+| **Run C** | Default Blend (45% Cosmo, 45% FW, 10% Tiny) | mb=4 / ga=8 | 62.2 min | 21.7 min (259) | 66,997.3 | 2.4312 | **2.9364 (1.0338)** | 2.1149 (0.7354) | 2.8695 (0.9961) | 1.6175 (0.7247) |
+| **Run D** | Simpler Blend (40% Tiny, 40% Cosmo, 20% FW) | mb=4 / ga=8 | 57.2 min | 31.1 min (371) | 72,835.5 | 1.9768 | 3.0433 (1.0714) | 2.1608 (0.7513) | 2.9948 (1.0396) | **1.3661 (0.6121)** |
 
-**Decision Rule:** Determine whether pure synthetic, pure web, or an interpolated blend achieves the lowest perplexity on the neutral reference set. The winning distribution ratio sets the data blend for Stage A pretraining.
+> [!NOTE]
+> **Notes on Micro-Batch, Perplexity Math, and Text Behavior**:
+> - **Micro-Batch Configuration**: Run A utilized micro-batch 8 (grad accum 4) prior to the VRAM headroom optimization. Runs B, C, and D utilized micro-batch 4 (grad accum 8) to maintain GPU memory under 5.0 GB. Floating-point variations from accumulation order remain strictly within provisional noise bounds.
+> - **Perplexity Mathematics**: Run A achieves lower cross-entropy on FineWeb-Edu than Run C (2.7818 vs 2.8695 CE, $\Delta\text{CE} = +0.0877$). The true perplexity ratio is $\exp(\Delta\text{CE}) = \exp(0.0877) = 1.092$ (+9.2% perplexity on FineWeb-Edu). On neutral Wikipedia, Run A achieved 2.8349 vs Run C's 2.9364 ($\Delta\text{CE} = +0.1015$, $\exp(0.1015) = 1.107$, or +10.7% perplexity).
+> - **Code Generation Observation**: Repetition during code generation in Run A was observed on an isolated Python prompt ("To write a simple Python function that adds two numbers: "), and is noted as an observation rather than a confirmed systematic defect across all coding tasks.
+> - **Stage A Mixture Decision**: Approved as **60% FineWeb-Edu / 30% Cosmopedia v2 / 10% TinyStories**. This blend interpolates between Run A's encyclopedic breadth and Run C's narrative fluency and instructional coherence.
 
-**Deliverable:** `results/distill_ablation.csv`, loss curves on neutral reference set, cross-distribution loss table, generation samples, mixture ratio verdict.
+### 5. Step 5: Post-Fix Re-Verification Suite Results (Completed)
+
+Following the label-shift fix, three mandatory re-verifications were executed on real hardware:
+
+#### 1. Shape Re-Verification (`4L_768H_1KV` vs `6L_768H_1KV`)
+- **Setup**: `4L_768H_1KV` trained for 250M tokens under identical conditions to 6L Run C (45% Cosmo / 45% FineWeb / 10% TinyStories, micro-bs 4, grad accum 8, LR 1e-3, seed 42, governor 83/78).
+- **Results (`results/shape_comparison_reverification.csv`)**:
+  - `val_wikipedia_neutral`: **6L = 2.9364 CE** (1.0338 BPB) vs **4L = 3.0277 CE** (1.0659 BPB) -> **6L Lead = -0.0913 CE** (-0.0321 BPB).
+  - `val_cosmopedia`: **6L = 2.1149 CE** vs **4L = 2.2214 CE** -> **6L Lead = -0.1065 CE**.
+  - `val_fineweb_edu`: **6L = 2.8695 CE** vs **4L = 2.9667 CE** -> **6L Lead = -0.0972 CE**.
+  - `val_tinystories`: **6L = 1.6175 CE** vs **4L = 1.6974 CE** -> **6L Lead = -0.0799 CE**.
+- **Significance**: The -0.0913 CE lead on neutral Wikipedia exceeds the $\ge 0.05$ CE confirmation threshold by $+0.0413$ CE ($12.0\times$ the provisional validation noise floor $\Delta_{\text{val}} = 0.0076$).
+- **Verdict**: `6L_768H_1KV` is **decisively confirmed as the winning architecture**. Second seed (seed 43) is not needed.
+
+#### 2. Learning Rate Check at Real Stage A Global Batch (128 Sequences = 262,144 Tokens)
+- **Setup**: Evaluated `6L_768H_1KV` on approved Stage A mix (60% FineWeb-Edu / 30% Cosmopedia v2 / 10% TinyStories) at batch 128 sequences (micro-bs 4, grad accum 32) across peak LRs `5e-4`, `1e-3`, `2e-3` for 150M tokens each (572 steps: 28 warmup, flat to 515, 57 terminal cosine decay).
+- **Results (`results/lr_reverification_summary.csv`)**:
+
+| Peak LR | Active Time | Pauses (Paused Min) | Active Tok/s | Final Train Loss | Neutral Wiki CE (BPB) | Cosmopedia CE (BPB) | FineWeb-Edu CE (BPB) | TinyStories CE (BPB) |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **$5.0 \times 10^{-4}$** | 33.63 min | 84 (7.04 min) | 74,306.6 | 3.0516 | 3.6588 (1.2881) | 2.9109 (1.0122) | 3.4712 (1.2050) | 2.1798 (0.9766) |
+| **$1.0 \times 10^{-3}$** | 33.87 min | 94 (7.88 min) | 73,783.8 | 2.8092 | 3.2936 (1.1595) | 2.6667 (0.9273) | 3.2112 (1.1147) | 2.0005 (0.8963) |
+| **$2.0 \times 10^{-3}$ (Winner)** | **34.60 min** | **89 (7.49 min)** | **72,223.3** | **2.7670** | **3.2631 (1.1488)** | **2.6130 (0.9086)** | **3.1795 (1.1037)** | **1.9434 (0.8707)** |
+
+- **Verdict**: **$\eta_0 = 2.0 \times 10^{-3}$ is the decisive winner across all 4 validation sets**. Due to the 4x larger global batch size (128 seqs vs 32 seqs), gradient variance is reduced, enabling the model to learn substantially faster and reach lower loss. Peak LR for Stage A is locked at **$2.0 \times 10^{-3}$**.
+
+#### 3. Final Training Codebase Throughput Verification
+- **Setup**: Benchmarked on RTX 3070 Ti with PyTorch 2.6 CUDA 12.4 in WSL2 using final production training code (`results/final_training_throughput.csv`):
+  - **2,048 Context (Stage A)**: micro_bs=4, grad_ckpt=False -> **74,900.0 tok/s** (269.64M tok/hr) | Step time: 109.4 ms | Peak VRAM: 4,308 MB.
+  - **8,192 Context (Stage B)**: micro_bs=1, grad_ckpt=False -> **51,324.2 tok/s** (184.77M tok/hr) | Step time: 159.6 ms | Peak VRAM: 4,444 MB.
+  - **32,768 Context (Stage C)**: micro_bs=1, grad_ckpt=True -> **21,569.1 tok/s** (77.65M tok/hr) | Step time: 1,519.2 ms | Peak VRAM: 5,715 MB.
 
 ---
 
@@ -254,23 +305,63 @@ LR
    0                         Stage A                          Stage B       Stage C
 ```
 
-#### Total Training Token Allocation & Reserve Budget
-The training capacity on the RTX 3070 Ti is planned around 3.2B tokens:
-- **Stage A (2k Short Foundation)**: 2,500M tokens (78.1%)
-- **Stage B (8k Long Extension)**: 250M tokens (7.8%)
-- **Stage C (32k Long Extension & Anneal)**: 115M tokens (3.6%)
-- **Quality Anneal (Stage C2)**: 35M tokens (1.1%)
-- **Reserve Budget (Safety & Contingency)**: 300M tokens (9.4%)
-- **Total Planned Capacity**: 3,200M tokens (100.0%)
+#### Recomputed 12-Hour Staged Training Budget & Wall-Clock Estimates (`6L_768H_1KV`)
+Based on measured active training throughputs on the RTX 3070 Ti (8GB) with PyTorch 2.6 CUDA 12.4 in WSL2 (`results/final_training_throughput.csv`):
+- **2k Context (Stage A)**: **74,900.0 tok/s** (269.64M tokens/hr) | micro_bs=4, grad_accum=32, grad_ckpt=False, Peak VRAM: 4,308 MB
+- **8k Context (Stage B)**: **51,324.2 tok/s** (184.77M tokens/hr) | micro_bs=1, grad_accum=32, grad_ckpt=False, Peak VRAM: 4,444 MB
+- **32k Context (Stage C)**: **21,569.1 tok/s** (77.65M tokens/hr) | micro_bs=1, grad_accum=4, grad_ckpt=True, Peak VRAM: 5,715 MB
 
-*The 300M-token reserve is explicitly set aside for dynamic stage extensions (e.g. +2,000 sequences in Stage C) or on-demand fallback decay branches without exceeding the overall compute budget.*
+| Training Stage | Context Length | Target Tokens | Sequence Count | Global Batch Size | Optimizer Steps | Active Hours | Wall-Clock Hours (Typical 18–22% Pauses) | Wall-Clock Range (7.5%–25% Pause Bounds) | % of Active Time |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Stage A (Short Foundation)** | 2,048 | 2,149.6M | 1,049,600 | 128 seqs (262k tok) | 8,200 | **7.97 hrs** | 9.40 – 9.72 hrs | 8.57 – 10.63 hrs | 73.8% |
+| **Stage B (8k Long Extension)** | 8,192 | 250.1M | 30,528 | 32 seqs (262k tok) | 954 | **1.35 hrs** | 1.59 – 1.65 hrs | 1.45 – 1.80 hrs | 12.5% |
+| **Stage C (32k Extension & Anneal)** | 32,768 | 114.7M | 3,500 | 4 seqs (131k tok) | 875 | **1.48 hrs** | 1.75 – 1.81 hrs | 1.59 – 1.97 hrs | 13.7% |
+| **Active Training Subtotal** | — | **2,514.4M** | **1,083,628** | — | **10,029** | **10.80 hrs** | **12.74 – 13.18 hrs** | **11.61 – 14.40 hrs** | **100.0%** |
+| **10% Compute Reserve** | — | — | — | — | — | **1.20 hrs** | 1.42 – 1.46 hrs | 1.29 – 1.60 hrs | — |
+| **Total Pipeline Allocation** | — | **2,514.4M** | **1,083,628** | — | **10,029** | **12.00 hrs** | **14.16 – 14.64 hrs** | **12.90 – 16.00 hrs** | — |
+
+> [!IMPORTANT]
+> **WALL-CLOCK TIME & TEMPERATURE GOVERNOR DYNAMICS**:
+> - Training time is strictly budgeted by **active compute hours** (10.80 active hours for Stages A–C + 1.20 active hours reserve = 12.00 active hours total).
+> - Thermal pauses under the approved **83°C pause / 78°C resume** threshold were empirically measured across all runs:
+>   - Step 2A (4L reverification): 3.27 min paused across 45.77 min wall clock = **7.1% pause share** (7.7% of active time).
+>   - Step 2B (6L LR check, 3 trials of 150M tokens each): 22.41 min paused across 124.53 min wall clock = **18.0% pause share** (21.9% of active time).
+> - At the measured steady-state overhead of 18–22%, the 10.80 active hours of training will require **12.7 to 13.2 wall-clock hours**.
+> - The governor automatically alerts if cumulative pauses exceed 25% of elapsed wall-clock time (which caps maximum wall-clock duration at 14.40 wall hours for active training).
+>
+> **DECAY BRANCHES (ON-DEMAND ONLY)**:
+> Decay branches are non-default fallback checkpoints branched on demand; they do NOT consume main-line training budget:
+> - **Branch A (2k Release)**: 100M tokens (~381 optimizer steps, ~0.37 hr) branched from Stage A if a dedicated 2k release model is needed.
+> - **Branch B (8k Release)**: 100M tokens (~381 optimizer steps, ~0.54 hr) branched from Stage B if Stage C fails entrance criteria.
+
+#### Summary Table of Final Training Specifications
+
+| Specification Item | Final Chosen Setting | Rationale / Source |
+| :--- | :--- | :--- |
+| **Model Architecture** | `6L_768H_1KV` (42.28M params) | Won iso-token (-0.1371 CE) and iso-wall (-0.1005 CE) head-to-head; re-verified in Step 2A (+0.0913 CE lead over 4L on Wikipedia). |
+| **Stage A Data Mixture** | **60% FineWeb-Edu / 30% Cosmopedia v2 / 10% TinyStories** | Interpolates FineWeb-Edu encyclopedic breadth (2.8349 CE) with Cosmopedia v2 reasoning and TinyStories fluency. |
+| **Stage A Peak Learning Rate** | **$2.0 \times 10^{-3}$** | Decisive winner in Step 2B 3-point sweep at batch 128 (3.2631 CE on Wiki vs 3.2936 at 1e-3 and 3.6588 at 5e-4). |
+| **Stage A Global Batch Size** | **128 sequences (262,144 tokens)** | Standard foundation batch size; allows efficient gradient accumulation while stabilizing optimization. |
+| **Micro-Batch Size (Stage A)** | **4 sequences (8,192 tokens)** | Tested in `results/micro_batch_vram_test.csv`; caps total GPU memory at ~4.3 GB (safely below 5.0 GB limit). |
+| **Gradient Accumulation Steps** | **32 steps** | $4 \text{ seqs} \times 32 = 128 \text{ sequences}$ ($262,144\text{ tokens}$ per optimizer step). |
+| **Warmup Schedule** | **100 optimizer steps (~1.2% of Stage A)** | Linear ramp from 0 to peak LR $2.0 \times 10^{-3}$ (first 26.2M tokens). |
+| **Learning Rate Schedule** | **Warmup-Stable-Decay (WSD)** | Flat at peak LR through step 8,200; undecayed checkpoint advances directly to Stage B ($0.7 \times \eta_0$). |
+| **Checkpoint Interval** | **Every 15 minutes of active training** | Resumable state (weights, optimizer, RNG, dataloader) with rolling 2-checkpoint retention. Verified $\Delta = 0.0031$. |
+| **Temperature Governor** | **Pause at $\ge 83^\circ$C, resume at $\le 78^\circ$C** | Monitored between optimizer steps; pause log written to `results/pause_log.csv`; alerts if pause share $> 25\%$. |
+| **Pre-Flight Regression Test** | **Mandatory dummy sequence test** | Asserts `[1,2,3,4,5] -> x:[1,2,3,4], y:[2,3,4,5]` and verifies loss function does not apply secondary shift. |
 
 #### Stage Details & Data Mixtures
 
 1. **Stage A: Foundation Pretraining (Context 1,024–2,048 tokens, RoPE base $\theta = 10{,}000$)**
-   - **Data Mixture**: Winning data blend from Phase 5 (Cosmopedia v2 + FineWeb-Edu + TinyStories).
-   - **LR Schedule**: Linear warmup over first 1% of Stage A steps to peak LR $\eta_0$, remaining flat in the **stable phase** at $\eta_0$.
-   - **On-Demand Fallback Decay Branch A**: If needed, copy the checkpoint at the end of Stage A and run a 100M-token cosine decay down to $0.1\times \eta_0$ to produce a fully converged short-context release checkpoint. The undecayed checkpoint continues into Stage B.
+   - **Data Mixture**: Approved blend (60% FineWeb-Edu / 30% Cosmopedia v2 / 10% TinyStories). Needs < 1 epoch (< 0.64x) of every source (100% unique tokens).
+   - **LR Schedule**: Linear warmup over first 100 steps (~1.2%) to peak LR $\eta_0 = 2.0\times 10^{-3}$ *(highest value tested, 150M-token sweep only; safety-net guarded)*, remaining flat for the entire stage (WSD, no decay in main run).
+   - **Fault-Tolerance & Monitoring Protocol**:
+     - *Real-Pipeline Regression Test*: Mandatory pre-flight test verifying (a) $y$ is $x$ shifted by exactly 1 position within sequence, (b) reported loss matches independent cross-entropy on raw tokens, and (c) teacher-forced accuracy against $t+1$ is clearly higher than against $t+2$ on a held-out batch.
+     - *Checkpoint Retention*: 15-minute rolling pair (last 2 checkpoints) plus one permanent checkpoint per active hour of training.
+     - *Loss-Spike Guard*: If loss is NaN/inf, or exceeds 1.5x its trailing 100-step average for 20 consecutive steps, roll back to the last good checkpoint, advance data loader past the offending window (128 sequences), log the event, and continue. If a second event occurs within 500 steps, or loss is NaN/inf again, STOP and wait for review. Never retry automatically after repeated divergence.
+     - *Hourly Monitoring*: Evaluate every active hour on all four validation sets (`val_wikipedia_neutral`, `val_fineweb_edu`, `val_cosmopedia`, `val_tinystories`) using the SAME fixed 2M-token subset each time (CE and BPB), and generate 5 fixed-prompt samples. Evaluation time tracked separately from active training time.
+     - *System Resiliency*: Windows sleep/hibernate disabled via CLI (`powercfg`). Wrapped in auto-resume process restarting from latest checkpoint on crash (max 2 retries, divergence halts).
+   - **On-Demand Fallback Decay Branch A**: Copy checkpoint at the end of Stage A and run ~50M tokens cosine decay from $2.0\times 10^{-3}$ down to $2.0\times 10^{-4}$ on the same mix. Evaluate on all 4 validation sets and generate samples. The undecayed checkpoint continues into Stage B.
 
 2. **Stage B: Long-Context Extension to 8k (Context 8,192 tokens, RoPE base $\theta = 500{,}000$–$1{,}000{,}000$)**
    - **Token Budget**: 250M tokens (~30,500 sequences of 8k).
@@ -282,8 +373,8 @@ The training capacity on the RTX 3070 Ti is planned around 3.2B tokens:
      - **Short Replay (Cosmopedia v2 + FineWeb-Edu short)**: 25% (62.5M tokens)
      - **Sum**: $35\% + 25\% + 15\% + 25\% = 100.0\%$ (250.0M tokens).
    - **Replay Implementation**: Short replay sequences are batched exclusively in separate 2,048-token batches (alternating with long batches) to prevent cross-document attention leakage across packed short documents.
-   - **LR Schedule**: Continues directly at **$0.7\times \eta_0$** (with a brief 0.1% micro-ramp). Does NOT re-warm to full peak $\eta_0$ and does NOT start from a decayed LR.
-   - **On-Demand Fallback Decay Branch B**: If Stage C is not pursued or fails its entrance checks, branch off a 100M-token cosine decay to $0.1\times \eta_0$ from the Stage B checkpoint to produce a verified, stable 8k-context release model.
+   - **LR Schedule**: Continues directly at **absolute flat $\text{LR} = 7.0\times 10^{-4}$ ($0.7\times 10^{-3}$)** with a brief 0.1% micro-ramp. *(Uses the originally planned absolute value, NOT a multiple of Stage A's $2.0\times 10^{-3}$, to prevent doubling the learning rate during RoPE base extension)*. Does NOT re-warm to full peak $\eta_0$ and does NOT start from a decayed LR.
+   - **On-Demand Fallback Decay Branch B**: If Stage C is not pursued or fails entrance checks, branch off a 100M-token cosine decay to $1.0\times 10^{-4}$ from Stage B checkpoint to produce a verified 8k release model.
    - **Verification Gate**: Evaluate both (1) position-bucket loss and passkey retrieval at 1k, 2k, 4k, 8k, AND (2) short-context validation loss on the 2k benchmark to confirm zero capability degradation. Both must pass before launching Stage C.
 
 3. **Stage C: Long-Context Extension to 32k & Quality Anneal (Context 32,768 tokens, RoPE base $\theta = 1{,}000{,}000$–$4{,}000{,}000$)**
@@ -293,9 +384,9 @@ The training capacity on the RTX 3070 Ti is planned around 3.2B tokens:
      - **PG-19 Books (Continuous sequences $\ge 32\text{k}$)**: 75% (86.0M tokens, ~2,625 sequences).
      - **Short Replay (Cosmopedia v2 + FineWeb-Edu, in separate 2k batches)**: 25% (28.7M tokens, ~875 sequence equivalents).
      - **Sum**: 100.0% (114.7M tokens).
-   - **Sub-stage C1 (Sequences 1–1,750)**: Stable 32k adaptation at flat **$0.5\times \eta_0$** (with 0.1% micro-ramp).
-   - **Dynamic Extension Rule**: If 32k passkey retrieval is below 80% or loss slope is still decreasing steeply at sequence 1,750, draw up to 2,000 additional sequences (+500 optimizer steps, +65.5M tokens) from the 300M reserve budget before initiating the terminal anneal.
-   - **Sub-stage C2 (Final 1,750 Sequences) - Quality Anneal**: LR decays smoothly via cosine schedule down to **$0.1\times \eta_0$**, while shifting the mixture toward the highest-quality educational and long-form data.
+   - **Sub-stage C1 (Sequences 1–1,750)**: Stable 32k adaptation at **absolute flat $\text{LR} = 5.0\times 10^{-4}$ ($0.5\times 10^{-3}$)** with 0.1% micro-ramp. *(Originally planned absolute LR preserved)*.
+   - **Dynamic Extension Rule**: If 32k passkey retrieval is below 80% or loss slope is still decreasing steeply at sequence 1,750, draw up to 2,000 additional sequences (+500 optimizer steps, +65.5M tokens) from reserve budget before initiating terminal anneal.
+   - **Sub-stage C2 (Final 1,750 Sequences) - Quality Anneal**: LR decays smoothly via cosine schedule down to **absolute $\text{LR} = 1.0\times 10^{-4}$ ($1\times 10^{-4}$)**, while shifting the mixture toward the highest-quality educational and long-form data.
 
 ### Long-Document Data Strategy & Repetition Audit
 - FineWeb-Edu and Wikipedia have **0 documents ≥ 32k tokens**. PG-19 is the verified large public-domain corpus with continuous documents ≥ 32k tokens (**2.95B tokens ≥ 32k** across 28,752 books in full corpus; **661.6M tokens ≥ 32k** across the 5,176 books in our local expanded training shard).

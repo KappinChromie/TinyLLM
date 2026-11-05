@@ -1,4 +1,4 @@
-lr,total_steps,elapsed_sec,tokens_seen,final_loss,min_loss,tok_per_sec,peak_vram_mib
-0.0005,1771,1200.58,116064256,4.5507,4.1687,96673.2,4154.8
-0.001,1844,1200.1,120848384,4.478,4.1156,100698.4,4155.4
-0.002,1868,1200.61,122421248,4.9513,4.6045,101965.5,4155.4
+lr,total_steps,elapsed_sec,tokens_seen,final_loss,min_loss,tok_per_sec,peak_vram_mib,training_status
+0.0005,1771,1200.58,116064256,4.5507,4.1687,96673.2,4154.8,pre-fix (double-shift)
+0.001,1844,1200.1,120848384,4.478,4.1156,100698.4,4155.4,pre-fix (double-shift)
+0.002,1868,1200.61,122421248,4.9513,4.6045,101965.5,4155.4,pre-fix (double-shift)
