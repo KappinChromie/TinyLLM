@@ -1,0 +1,179 @@
+# Stage A Decayed Model GGUF Parity Audit
+Model GGUF: stageA_decay_f16.gguf
+
+### Prompt 1: `Once upon a time, there was a little bunny named `
+**Status**: `MATCH`
+
+**PyTorch Output**:
+```text
+Once upon a time, there was a little bunny named ignorant. He lived in a big forest with his friends. One day, he found a big, shiny rock. He was so happy!
+```
+
+**llama.cpp Output**:
+```text
+Once upon a time, there was a little bunny named ignorant. He lived in a big forest with his friends. One day, he found a big, shiny rock. He was so happy!
+```
+
+---
+
+### Prompt 2: `The fundamental difference between planets and stars is `
+**Status**: `MATCH`
+
+**PyTorch Output**:
+```text
+The fundamental difference between planets and stars is irrelevant.
+The planets are the largest planets in the solar system, and the stars are the smallest of
+```
+
+**llama.cpp Output**:
+```text
+The fundamental difference between planets and stars is irrelevant.
+The planets are the largest planets in the solar system, and the stars are the smallest of
+```
+
+---
+
+### Prompt 3: `To write a simple Python function that adds two numbers: `
+**Status**: `MATCH`
+
+**PyTorch Output**:
+```text
+To write a simple Python function that adds two numbers: 0 and 1.
+
+Now, let's see how we can use the `numpy` library to perform mathematical operations
+```
+
+**llama.cpp Output**:
+```text
+To write a simple Python function that adds two numbers: 0 and 1.
+
+Now, let's see how we can use the `numpy` library to perform mathematical operations
+```
+
+---
+
+### Prompt 4: `In ancient history, the Great Pyramid of Giza was built `
+**Status**: `MATCH`
+
+**PyTorch Output**:
+```text
+In ancient history, the Great Pyramid of Giza was built roughly on the site of the ancient city of Giza. The Great Pyramid was built by the Greeks in the 1
+```
+
+**llama.cpp Output**:
+```text
+In ancient history, the Great Pyramid of Giza was built roughly on the site of the ancient city of Giza. The Great Pyramid was built by the Greeks in the 1
+```
+
+---
+
+### Prompt 5: `Lily wanted to bake a cake for her mom. First, she `
+**Status**: `MATCH`
+
+**PyTorch Output**:
+```text
+Lily wanted to bake a cake for her mom. First, she rounded the cake into a big bowl. Then, she put the cake in the oven and waited.
+
+When the
+```
+
+**llama.cpp Output**:
+```text
+Lily wanted to bake a cake for her mom. First, she rounded the cake into a big bowl. Then, she put the cake in the oven and waited.
+
+When the
+```
+
+---
+
+### Prompt 6: `Water evaporates when the temperature rises because `
+**Status**: `MATCH`
+
+**PyTorch Output**:
+```text
+Water evaporates when the temperature rises because ice crystals form.
+
+By understanding the basics of water evaporation, we can appreciate the beauty of nature's beaut
+```
+
+**llama.cpp Output**:
+```text
+Water evaporates when the temperature rises because ice crystals form.
+
+By understanding the basics of water evaporation, we can appreciate the beauty of nature's beaut
+```
+
+---
+
+### Prompt 7: `A computer network is a system of connected computers that `
+**Status**: `MATCH`
+
+**PyTorch Output**:
+```text
+A computer network is a system of connected computers that ignore the data that is being processed.
+The computer is a computer that is able to process data and perform tasks that are not performed in
+```
+
+**llama.cpp Output**:
+```text
+A computer network is a system of connected computers that ignore the data that is being processed.
+The computer is a computer that is able to process data and perform tasks that are not performed in
+```
+
+---
+
+### Prompt 8: `The dog ran across the park to catch `
+**Status**: `MATCH`
+
+**PyTorch Output**:
+```text
+The dog ran across the park to catch ice. 
+
+The dog was so happy to be free. He ran back to the park and played with his friends. They had a lot of fun
+```
+
+**llama.cpp Output**:
+```text
+The dog ran across the park to catch ice. 
+
+The dog was so happy to be free. He ran back to the park and played with his friends. They had a lot of fun
+```
+
+---
+
+### Prompt 9: `Photosynthesis is the biological process by which plants `
+**Status**: `MATCH`
+
+**PyTorch Output**:
+```text
+Photosynthesis is the biological process by which plants irradiate their photosynthetic activity. The photosynthesis process is the process by which plants irrad
+```
+
+**llama.cpp Output**:
+```text
+Photosynthesis is the biological process by which plants irradiate their photosynthetic activity. The photosynthesis process is the process by which plants irrad
+```
+
+---
+
+### Prompt 10: `When solving a math problem, it is important to `
+**Status**: `MATCH`
+
+**PyTorch Output**:
+```text
+When solving a math problem, it is important to ignore the fact that the problem is solved.
+
+In this chapter, we will explore the concept of solving a math problem using P
+```
+
+**llama.cpp Output**:
+```text
+When solving a math problem, it is important to ignore the fact that the problem is solved.
+
+In this chapter, we will explore the concept of solving a math problem using P
+```
+
+---
+
+
+Overall GGUF Parity Result: 10/10 matched (100.0%)

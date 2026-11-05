@@ -24,6 +24,7 @@ TOKENIZER_DIR = MODELS_DIR / "tokenizer_8k"
 RESULTS_DIR = ROOT / "results"
 TOOLS_DIR = ROOT / "tools" / "llama-bin"
 
+LLAMA_COMPLETION = TOOLS_DIR / "llama-completion.exe"
 LLAMA_CLI = TOOLS_DIR / "llama-cli.exe"
 CONVERT_SCRIPT = ROOT / "tools" / "llama.cpp-src" / "convert_hf_to_gguf.py"
 OUT_REPORT = RESULTS_DIR / "stageA_decay_gguf_parity.txt"
@@ -61,13 +62,16 @@ def export_to_hf_and_gguf(ckpt_path, hf_dir, gguf_path):
         eos_token_id=2,
     )
     model = LlamaForCausalLM(config)
-    raw = torch.load(ckpt_path, map_location="cpu")
+    raw = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     model.load_state_dict(raw["model_state"] if "model_state" in raw else raw)
     model.save_pretrained(hf_dir)
     
     # Copy tokenizer files
     shutil.copyfile(TOKENIZER_DIR / "tokenizer.model", hf_dir / "tokenizer.model")
-    shutil.copyfile(TOKENIZER_DIR / "tokenizer_config.json", hf_dir / "tokenizer_config.json")
+    if (TOKENIZER_DIR / "tokenizer_config.json").exists():
+        shutil.copyfile(TOKENIZER_DIR / "tokenizer_config.json", hf_dir / "tokenizer_config.json")
+    if (hf_dir / "tokenizer.json").exists():
+        (hf_dir / "tokenizer.json").unlink()
     
     print(f"Converting HF model to GGUF at {gguf_path}...", flush=True)
     cmd = [
@@ -77,7 +81,9 @@ def export_to_hf_and_gguf(ckpt_path, hf_dir, gguf_path):
         "--outfile", str(gguf_path),
         "--outtype", "f16"
     ]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(ROOT / "tools" / "llama.cpp-src" / "gguf-py") + (":" + env.get("PYTHONPATH", "") if "PYTHONPATH" in env else "")
+    res = subprocess.run(cmd, capture_output=True, text=True, env=env)
     if res.returncode != 0:
         print("Convert failed:", res.stderr)
         raise RuntimeError(f"GGUF convert failed: {res.stderr}")
@@ -90,26 +96,40 @@ def generate_pytorch(model, sp, prompt, device, max_new_tokens=32):
     with torch.no_grad():
         for _ in range(max_new_tokens):
             inp = torch.tensor([curr_ids[-2048:]], dtype=torch.long, device=device)
-            with torch.autocast(device_type="cuda" if device=="cuda" else "cpu", dtype=torch.bfloat16):
-                out = model(inp)
-                next_tok = torch.argmax(out.logits[0, -1, :]).item()
+            out = model(inp)
+            next_tok = torch.argmax(out.logits[0, -1, :]).item()
             curr_ids.append(next_tok)
             if next_tok == sp.eos_id():
                 break
     return sp.decode(curr_ids)
 
+def to_windows_path(p):
+    p_str = str(p)
+    if shutil.which("wslpath"):
+        try:
+            res = subprocess.run(["wslpath", "-w", p_str], capture_output=True, text=True, check=True)
+            return res.stdout.strip()
+        except Exception:
+            pass
+    if p_str.startswith("/mnt/c/"):
+        return "C:/" + p_str[7:]
+    return p_str
+
 def generate_llama_cpp(gguf_path, prompt, max_new_tokens=32):
-    # Call llama-cli.exe in Windows
+    win_gguf = to_windows_path(gguf_path)
     cmd = [
-        str(LLAMA_CLI),
-        "-m", str(gguf_path),
+        str(LLAMA_COMPLETION),
+        "-m", win_gguf,
         "-p", prompt,
         "-n", str(max_new_tokens),
         "--temp", "0.0",
-        "-fa", "1",
+        "--top-k", "0",
+        "--top-p", "1.0",
+        "--min-p", "0.0",
+        "--repeat-penalty", "1.0",
         "-ngl", "99",
         "-c", "2048",
-        "--log-disable"
+        "--override-kv", "tokenizer.ggml.add_bos_token=bool:false"
     ]
     res = subprocess.run(cmd, capture_output=True, text=True)
     return res.stdout.strip()
@@ -132,7 +152,7 @@ def main():
     sp.load(str(TOKENIZER_DIR / "tokenizer.model"))
     
     config = LlamaConfig.from_pretrained(hf_dir)
-    model = LlamaForCausalLM.from_pretrained(hf_dir, torch_dtype=torch.bfloat16).to(device)
+    model = LlamaForCausalLM.from_pretrained(hf_dir, torch_dtype=torch.float16).to(device)
     
     parity_lines = []
     parity_lines.append("# Stage A Decayed Model GGUF Parity Audit\n")

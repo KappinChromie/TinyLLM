@@ -362,6 +362,26 @@ Based on measured active training throughputs on the RTX 3070 Ti (8GB) with PyTo
      - *Hourly Monitoring*: Evaluate every active hour on all four validation sets (`val_wikipedia_neutral`, `val_fineweb_edu`, `val_cosmopedia`, `val_tinystories`) using the SAME fixed 2M-token subset each time (CE and BPB), and generate 5 fixed-prompt samples. Evaluation time tracked separately from active training time.
      - *System Resiliency*: Windows sleep/hibernate disabled via CLI (`powercfg`). Wrapped in auto-resume process restarting from latest checkpoint on crash (max 2 retries, divergence halts).
    - **On-Demand Fallback Decay Branch A**: Copy checkpoint at the end of Stage A and run ~50M tokens cosine decay from $2.0\times 10^{-3}$ down to $2.0\times 10^{-4}$ on the same mix. Evaluate on all 4 validation sets and generate samples. The undecayed checkpoint continues into Stage B.
+   - **Stage A Execution Summary & Audit (COMPLETED)**:
+     - *Total Tokens Processed*: 2,149.58M tokens (8,200 optimizer steps).
+     - *Active Training Time*: 7.88 active hours (472.6 min) at an average throughput of **75,804 tok/s** (~272.9M tok/hr).
+     - *Wall-Clock & Thermal Governor*: Total wall-clock time 8.12 hours (487.2 min). Thermal governor engaged 82 times for a cumulative pause duration of only 6.9 minutes (**1.4% pause share**, well below the 25% ceiling). Evaluation time: 4.2 minutes across 7 hourly evaluations.
+     - *Loss-Spike Guard*: 0 spike events detected, 0 rollbacks triggered (`spike_event_count = 0`). Monotonic convergence from initial CE loss 6.1281 down to final 2.2821.
+     - *Hourly Validation Monotonic Progression*:
+       - Hour 1 (step 998, 261.6M tok): Wiki CE 3.0313 (BPB 1.0671), FW CE 2.9799 (BPB 1.0344), Cosmo CE 2.3503 (BPB 0.8172), Tiny CE 1.7901 (BPB 0.8020)
+       - Hour 3 (step 3002, 787.0M tok): Wiki CE 2.8069 (BPB 0.9881), FW CE 2.7489 (BPB 0.9543), Cosmo CE 2.0601 (BPB 0.7163), Tiny CE 1.5527 (BPB 0.6957)
+       - Hour 5 (step 5131, 1345.1M tok): Wiki CE 2.7214 (BPB 0.9580), FW CE 2.6687 (BPB 0.9264), Cosmo CE 1.9576 (BPB 0.6806), Tiny CE 1.4883 (BPB 0.6668)
+       - Hour 7 (step 7265, 1904.5M tok): Wiki CE 2.6781 (BPB 0.9428), FW CE 2.6375 (BPB 0.9156), Cosmo CE 1.9168 (BPB 0.6664), Tiny CE 1.4589 (BPB 0.6536)
+       - Final Step 8200 (2149.6M tok): Wiki CE 2.6709 (BPB 0.9403), FW CE 2.6412 (BPB 0.9169), Cosmo CE 1.9209 (BPB 0.6679), Tiny CE 1.4559 (BPB 0.6523)
+     - *Fallback Decay Branch A (50.07M Tokens, 191 Steps Cosine 2.0e-3 -> 2.0e-4)*:
+       - Finished in 11.02 active min (75,704 tok/s, 0 pauses).
+       - Consistent improvement across all 4 held-out validation distributions:
+         - Wikipedia Neutral: CE 2.6709 -> **2.6143** (Δ -0.0566), BPB 0.9403 -> **0.9204**
+         - FineWeb-Edu: CE 2.6412 -> **2.5719** (Δ -0.0693), BPB 0.9169 -> **0.8928**
+         - Cosmopedia v2: CE 1.9209 -> **1.8399** (Δ -0.0810), BPB 0.6679 -> **0.6398**
+         - TinyStories: CE 1.4559 -> **1.3825** (Δ -0.0734), BPB 0.6523 -> **0.6194**
+     - *GGUF Export & llama.cpp Parity Check*: Converted to `stageA_decay_f16.gguf` (84.8 MB) with `add_bos_token: false`. Evaluated against PyTorch greedy decoding on 10 fixed prompts: **10/10 exact matches (100.0%)**.
+     - *Saved Artifacts*: `models/checkpoints/stageA/stageA_final_undecayed.pt` (untouched for Stage B launch), `models/checkpoints/stageA/stageA_decay_branch_final.pt`, `models/gguf/stageA_decay_f16.gguf`.
 
 2. **Stage B: Long-Context Extension to 8k (Context 8,192 tokens, RoPE base $\theta = 500{,}000$–$1{,}000{,}000$)**
    - **Token Budget**: 250M tokens (~30,500 sequences of 8k).

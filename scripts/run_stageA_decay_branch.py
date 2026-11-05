@@ -64,6 +64,46 @@ EVAL_PROMPTS_15 = [
 ]
 
 # ---------------------------------------------------------------------------
+# GPU Utilities & Temperature Governor (83C / 78C)
+# ---------------------------------------------------------------------------
+def find_nvidia_smi():
+    candidates = [
+        "/usr/lib/wsl/lib/nvidia-smi",
+        "nvidia-smi",
+        "/mnt/c/WINDOWS/system32/nvidia-smi.exe",
+        "nvidia-smi.exe"
+    ]
+    for c in candidates:
+        if shutil.which(c) or Path(c).exists():
+            return c
+    return "nvidia-smi"
+
+SMI_BIN = find_nvidia_smi()
+
+def get_gpu_telemetry():
+    try:
+        cmd = [SMI_BIN, "--query-gpu=temperature.gpu,power.draw", "--format=csv,noheader,nounits"]
+        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        parts = res.stdout.strip().split(",")
+        return float(parts[0]), float(parts[1])
+    except Exception:
+        return 0.0, 0.0
+
+def apply_temperature_governor(step, accum_tokens):
+    temp, _ = get_gpu_telemetry()
+    if temp < 83.0:
+        return 0.0, 0
+    t_start = time.time()
+    print(f"\n[!WARNING] Step {step}: GPU temperature {temp:.1f}C >= 83C threshold! Pausing decay training...", flush=True)
+    while temp > 78.0:
+        time.sleep(5)
+        temp, _ = get_gpu_telemetry()
+        print(f"  Cooling down: current temp = {temp:.1f}C (target <= 78C)...", end="\r", flush=True)
+    pause_duration = time.time() - t_start
+    print(f"\n[GOVERNOR] Temperature dropped to {temp:.1f}C <= 78C. Resuming decay training after {pause_duration:.1f}s pause.", flush=True)
+    return pause_duration, 1
+
+# ---------------------------------------------------------------------------
 # Data Loader
 # ---------------------------------------------------------------------------
 class ShardStreamDataLoader:
@@ -194,12 +234,17 @@ def main():
     sp.load(str(TOKENIZER_MODEL))
     
     model = create_model(device=device)
-    raw_data = torch.load(src_ckpt, map_location=device)
+    raw_data = torch.load(src_ckpt, map_location=device, weights_only=False)
     model.load_state_dict(raw_data["model_state"] if "model_state" in raw_data else raw_data)
     
     optimizer = torch.optim.AdamW(model.parameters(), lr=2e-3, betas=(0.9, 0.95), weight_decay=0.1, fused=True)
     loader = ShardStreamDataLoader(SHARDS_DIR, seq_len=2048, mix_weights=[0.30, 0.60, 0.10], seed=999)
     evaluator = Evaluator(SHARDS_DIR, device=device)
+
+    print("\n--- Pre-Decay Evaluation: Undecayed Stage A Final Checkpoint ---", flush=True)
+    undecayed_eval = evaluator.evaluate_all(model)
+    for vname, m in undecayed_eval.items():
+        print(f"  [Undecayed] {vname:25s}: CE = {m['ce']:.4f} | BPB = {m['bpb']:.4f}", flush=True)
     
     micro_bs = 4
     grad_accum = 32
@@ -210,11 +255,21 @@ def main():
     init_lr = 2.0e-3
     min_lr = 2.0e-4
     
-    print(f"Starting 50M token cosine decay ({total_steps} steps: 2.0e-3 -> 2.0e-4)...", flush=True)
+    print(f"\nStarting 50M token cosine decay ({total_steps} steps: 2.0e-3 -> 2.0e-4)...", flush=True)
     model.train()
     optimizer.zero_grad(set_to_none=True)
     
+    wall_start = time.time()
+    total_pause_time = 0.0
+    total_pause_count = 0
+
     for step in range(total_steps):
+        # Thermal governor between optimizer steps
+        tokens_seen = (step + 1) * tokens_per_step
+        p_dur, p_cnt = apply_temperature_governor(step + 1, tokens_seen)
+        total_pause_time += p_dur
+        total_pause_count += p_cnt
+
         # Cosine decay schedule
         coeff = 0.5 * (1.0 + math.cos(math.pi * step / total_steps))
         curr_lr = min_lr + coeff * (init_lr - min_lr)
@@ -237,31 +292,53 @@ def main():
         optimizer.zero_grad(set_to_none=True)
         
         if (step + 1) % 25 == 0 or step == total_steps - 1:
-            tokens_seen = (step + 1) * tokens_per_step
             print(f"[Decay Branch A] Step {step+1:3d}/{total_steps} | LR {curr_lr:.2e} | Loss {step_loss:.4f} | Tokens: {tokens_seen/1e6:.1f}M", flush=True)
             
+    wall_end = time.time()
+    total_wall_sec = wall_end - wall_start
+    active_sec = total_wall_sec - total_pause_time
+    total_decay_tokens = total_steps * tokens_per_step
+    tok_per_sec = total_decay_tokens / active_sec if active_sec > 0 else 0
+    print(f"\nDecay Training Completed in {total_wall_sec/60:.2f} min (Active: {active_sec/60:.2f} min, Paused: {total_pause_time:.1f}s in {total_pause_count} pauses)")
+    print(f"Decay Active Speed: {tok_per_sec:.0f} tok/s", flush=True)
+
     # Save decayed model
     torch.save(model.state_dict(), branch_ckpt)
     print(f"Saved decayed checkpoint to {branch_ckpt}", flush=True)
     
     # Evaluate across all 4 sets
-    print("\nEvaluating Decayed Model on all 4 validation sets...", flush=True)
-    eval_res = evaluator.evaluate_all(model)
-    for vname, m in eval_res.items():
-        print(f"  {vname:25s}: CE = {m['ce']:.4f} | BPB = {m['bpb']:.4f}", flush=True)
+    print("\n--- Post-Decay Evaluation: Decayed Stage A Fallback Checkpoint ---", flush=True)
+    decay_eval = evaluator.evaluate_all(model)
+    for vname, m in decay_eval.items():
+        delta_ce = decay_eval[vname]["ce"] - undecayed_eval[vname]["ce"]
+        print(f"  [Decayed]  {vname:25s}: CE = {m['ce']:.4f} (Δ {delta_ce:+.4f}) | BPB = {m['bpb']:.4f}", flush=True)
         
-    df_eval = pd.DataFrame([{
-        "model": "StageA_Decayed_Fallback",
-        "tokens_decayed_m": round((total_steps * tokens_per_step)/1e6, 2),
-        "val_wiki_ce": eval_res["val_wikipedia_neutral"]["ce"],
-        "val_wiki_bpb": eval_res["val_wikipedia_neutral"]["bpb"],
-        "val_fineweb_ce": eval_res["val_fineweb_edu"]["ce"],
-        "val_fineweb_bpb": eval_res["val_fineweb_edu"]["bpb"],
-        "val_cosmo_ce": eval_res["val_cosmopedia"]["ce"],
-        "val_cosmo_bpb": eval_res["val_cosmopedia"]["bpb"],
-        "val_tinystories_ce": eval_res["val_tinystories"]["ce"],
-        "val_tinystories_bpb": eval_res["val_tinystories"]["bpb"],
-    }])
+    df_eval = pd.DataFrame([
+        {
+            "model": "StageA_Final_Undecayed",
+            "tokens_decayed_m": 0.0,
+            "val_wiki_ce": undecayed_eval["val_wikipedia_neutral"]["ce"],
+            "val_wiki_bpb": undecayed_eval["val_wikipedia_neutral"]["bpb"],
+            "val_fineweb_ce": undecayed_eval["val_fineweb_edu"]["ce"],
+            "val_fineweb_bpb": undecayed_eval["val_fineweb_edu"]["bpb"],
+            "val_cosmo_ce": undecayed_eval["val_cosmopedia"]["ce"],
+            "val_cosmo_bpb": undecayed_eval["val_cosmopedia"]["bpb"],
+            "val_tinystories_ce": undecayed_eval["val_tinystories"]["ce"],
+            "val_tinystories_bpb": undecayed_eval["val_tinystories"]["bpb"],
+        },
+        {
+            "model": "StageA_Decayed_Fallback",
+            "tokens_decayed_m": round(total_decay_tokens / 1e6, 2),
+            "val_wiki_ce": decay_eval["val_wikipedia_neutral"]["ce"],
+            "val_wiki_bpb": decay_eval["val_wikipedia_neutral"]["bpb"],
+            "val_fineweb_ce": decay_eval["val_fineweb_edu"]["ce"],
+            "val_fineweb_bpb": decay_eval["val_fineweb_edu"]["bpb"],
+            "val_cosmo_ce": decay_eval["val_cosmopedia"]["ce"],
+            "val_cosmo_bpb": decay_eval["val_cosmopedia"]["bpb"],
+            "val_tinystories_ce": decay_eval["val_tinystories"]["ce"],
+            "val_tinystories_bpb": decay_eval["val_tinystories"]["bpb"],
+        }
+    ])
     df_eval.to_csv(DECAY_RESULTS_CSV, index=False)
     print(f"Saved decay evaluation to {DECAY_RESULTS_CSV}", flush=True)
     
