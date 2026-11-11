@@ -1,0 +1,4 @@
+model,concurrency,generation_tok_s,total_throughput_tok_s
+TinyLLM-Chat-Q8_0,1,1491.667725,2706.417236
+TinyLLM-Chat-Q8_0,32,12007.575195,21976.3125
+TinyLLM-Chat-Q8_0,128,16153.298828,28974.257812

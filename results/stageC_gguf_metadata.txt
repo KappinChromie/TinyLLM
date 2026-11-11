@@ -1,0 +1,4 @@
+  quant                  filename  size_mb  context_length  rope_freq_base  layers  heads  heads_kv  embedding_dim
+0   F16   stageC_decayed_f16.gguf    84.75           32768       1000000.0       6     12         1            768
+1  Q8_0  stageC_decayed_q8_0.gguf    45.12           32768       1000000.0       6     12         1            768
+2  Q4_0  stageC_decayed_q4_0.gguf    25.61           32768       1000000.0       6     12         1            768

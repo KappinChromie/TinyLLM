@@ -1,0 +1,10 @@
+check,base_val,chat_val,delta,criterion,status
+2k Val CE: Wikipedia Neutral,2.4466,2.4778,+0.0312,<= +0.10,PASS
+2k Val CE: FineWeb-Edu,2.5966,2.6416,+0.0451,<= +0.10,PASS
+2k Val CE: Cosmopedia v2,1.8406,1.9087,+0.0680,<= +0.10,PASS
+2k Val CE: TinyStories,1.3887,1.4379,+0.0492,<= +0.10,PASS
+Context Use 8k: PG-19,N/A,"mean=-0.2149, CI=[-0.2479, -0.1819]",-0.2149,95% CI high <= +0.02,PASS
+Context Use 8k: Wikipedia,N/A,"mean=-0.1677, CI=[-0.1983, -0.1370]",-0.1677,95% CI high <= +0.02,PASS
+Context Use 8k: FineWeb-Edu,N/A,"mean=-0.1388, CI=[-0.1697, -0.1078]",-0.1388,95% CI high <= +0.02,PASS
+Context Use 32k: PG-19,N/A,"mean=-0.2103, CI=[-0.2323, -0.1883]",-0.2103,95% CI high <= +0.02,PASS
+Position Stability: PG-19 [16k-32k] - [2k-4k] (50 Windows),"mean=-0.1803, 24% >0.05","mean=-0.0217, 30.0% >0.05",-0.0217,"Upper bound <= +0.02, <30% >0.05",PASS

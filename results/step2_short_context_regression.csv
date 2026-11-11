@@ -1,0 +1,5 @@
+benchmark_dataset,domain_type,stageA_undecayed_ce,stageA_decayed_ce,stageB_decayed_ce,stageC_decayed_final_ce,delta_vs_stageA_undecayed,delta_vs_stageA_decayed,delta_vs_stageB_decayed,threshold_status
+FineWeb-Edu (Out-of-Domain),Out-of-Domain,2.6303,2.5611,2.5368,2.5966,-0.0337,0.0355,0.0598,PASS (within +0.05)
+Cosmopedia v2 (Out-of-Domain),Out-of-Domain,1.9157,1.8351,1.8481,1.8406,-0.0751,0.0055,-0.0075,PASS (within +0.05)
+TinyStories (Out-of-Domain),Out-of-Domain,1.4544,1.3809,1.6021,1.3887,-0.0657,0.0078,-0.2134,PASS (drift reversed)
+Wikipedia Neutral (In-Domain),In-Domain (Trained in Stages B & C),2.6787,2.6216,2.3612,2.4466,-0.2321,-0.175,0.0854,IN-DOMAIN (Not Regression Test)

@@ -1,0 +1,8 @@
+subset,retained_examples,total_tokens_m,mean_tokens,median_tokens,p95_tokens
+everyday-conversations,2250,0.55,242.7,242.0,321.0
+smol-contraints,34062,9.79,287.3,245.0,613.0
+smollm-rewrite-30k,26559,12.62,475.3,425.0,822.0
+explore-instruct-rewrite,3017,0.36,120.4,116.0,204.0
+smol-summarize-20k,14653,5.33,364.1,335.0,642.8
+smol-summarize-5k,1553,0.81,523.8,526.0,947.8
+smol-magpie-ultra-short,33032,27.26,825.1,857.0,1010.0

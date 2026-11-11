@@ -1,0 +1,7 @@
+model,context_depth,filler_type,trials,cand_21_rank1_acc,vocab_8192_rank1_acc,greedy_acc,mean_vocab_rank,median_vocab_rank
+Chat Model (SFT Final),2048,prose,20,100.0,0.0,0.0,1837.95,1778.5
+Chat Model (SFT Final),2048,repetitive,20,100.0,0.0,0.0,1340.85,1413.0
+Chat Model (SFT Final),4096,prose,20,100.0,0.0,0.0,1963.45,1915.5
+Chat Model (SFT Final),4096,repetitive,20,90.0,0.0,0.0,1320.35,1265.0
+Chat Model (SFT Final),8192,prose,20,100.0,0.0,0.0,2232.55,2274.0
+Chat Model (SFT Final),8192,repetitive,20,85.0,0.0,0.0,987.45,1045.5

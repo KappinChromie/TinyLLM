@@ -2,12 +2,11 @@
 tools/
 models/
 __pycache__/
-*.gguf
 *.zip
 *.tar.gz
 *.bin
 data/raw/
 data/shards/
+data/sft/
 data/*.txt
 *.pt
-

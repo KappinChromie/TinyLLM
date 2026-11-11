@@ -1,0 +1,5 @@
+dataset,ppl,ce_loss
+val_wikipedia_neutral,11.8583,2.473028044341101
+val_fineweb_edu,12.9059,2.5576845711495215
+val_cosmopedia,7.2068,1.975025024759408
+val_tinystories,4.209,1.4372250897884336

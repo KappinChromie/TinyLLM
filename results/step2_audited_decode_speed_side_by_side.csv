@@ -1,0 +1,7 @@
+model,quant,depth,median_tok_s,min_tok_s,max_tok_s,std_tok_s,repetitions,gpu_temp_c,gpu_power_w
+Base Model (Stage C Decayed Q8_0),Q8_0,0,1566.16,1498.0,1613.62,28.58,10,59.0,113.57
+Base Model (Stage C Decayed Q8_0),Q8_0,8192,1445.57,1425.55,1459.5,10.04,10,60.0,119.78
+Base Model (Stage C Decayed Q8_0),Q8_0,32768,1235.92,1226.92,1253.84,7.69,10,62.0,128.04
+Chat Model (SFT Final Q8_0),Q8_0,0,1574.23,1520.49,1598.46,22.7,10,61.0,115.03
+Chat Model (SFT Final Q8_0),Q8_0,8192,1427.61,1409.94,1442.77,9.8,10,62.0,120.12
+Chat Model (SFT Final Q8_0),Q8_0,32768,1232.99,1219.64,1240.62,6.66,10,63.0,129.13

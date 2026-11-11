@@ -1,0 +1,9 @@
+context_depth,filler_type,trials,greedy_accuracy_pct,rank1_logprob_accuracy_pct,mean_logprob_rank
+4096,prose,20,0.0,0.0,867.15
+4096,repetitive,20,0.0,0.0,716.85
+8192,prose,20,0.0,0.0,1143.45
+8192,repetitive,20,0.0,0.0,451.65
+16384,prose,20,0.0,0.0,1147.75
+16384,repetitive,20,0.0,0.0,2785.75
+32768,prose,20,0.0,0.0,1499.4
+32768,repetitive,20,0.0,0.0,2635.9

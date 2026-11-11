@@ -1,0 +1,8 @@
+loader_stage,sampling_code,os,numpy_version,max_valid_idx,min_sampled,max_sampled,count_ge_2^31,outside_valid_range,status
+Stage A & Phase 5 (Cosmopedia with RandomState.randint int64),"rng.randint(0, max_idx, dtype=np.int64)",Windows 10,2.5.3,2298810942,383,2298810850,658962,False,OK
+Stage A & Phase 5 (Cosmopedia with RandomState.randint default dtype),"rng.randint(0, max_idx)",Windows 10,2.5.3,2298810942,ERROR,ERROR,ERROR,ERROR,EXCEPTION: ValueError: high is out of bounds for int32
+Stage A & Phase 5 (FineWeb-Edu with RandomState.randint),"rng.randint(0, max_idx)",Windows 10,2.5.3,2036282445,617,2036282216,0,False,OK
+Stage B (PG-19 8k with RandomState.randint),"self.rng_long.randint(0, max_idx)",Windows 10,2.5.3,672230333,45,672230157,0,False,OK
+Stage C (PG-19 32k with RandomState.randint),"self.rng_long.randint(0, max_offset)",Windows 10,2.5.3,672205757,45,672205511,0,False,OK
+SFT LR Trials (default_rng.integers 64-bit),"rng.integers(0, max_idx)",Windows 10,2.5.3,2298810942,122,2298810756,658880,False,OK
+Main SFT Run (default_rng.integers 64-bit),"rng.integers(0, max_idx)",Windows 10,2.5.3,2298810942,122,2298810756,658880,False,OK

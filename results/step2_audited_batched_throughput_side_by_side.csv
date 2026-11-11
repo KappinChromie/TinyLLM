@@ -1,0 +1,9 @@
+model,concurrency,prompt_tokens,gen_tokens,median_generation_tok_s,min_generation_tok_s,max_generation_tok_s,median_total_throughput_tok_s,repetitions,mean_gpu_temp_c,mean_gpu_power_w
+Base Model (Stage C Decayed Q8_0),1,512,128,1451.44,1441.78,1484.32,6452.98,10,53.8,65.1
+Base Model (Stage C Decayed Q8_0),2,512,128,2597.28,2554.76,2611.58,11371.35,10,54.7,73.5
+Base Model (Stage C Decayed Q8_0),4,512,128,4377.65,4263.47,4502.33,18409.56,10,55.8,76.1
+Base Model (Stage C Decayed Q8_0),8,512,128,6710.84,6329.9,6777.6,27020.4,10,56.1,80.5
+Chat Model (SFT Final Q8_0),1,512,128,1444.57,1427.97,1454.28,6422.12,10,56.0,74.5
+Chat Model (SFT Final Q8_0),2,512,128,2583.42,2536.86,2606.08,11314.65,10,56.0,75.5
+Chat Model (SFT Final Q8_0),4,512,128,4406.67,4360.9,4421.49,18473.25,10,56.6,76.1
+Chat Model (SFT Final Q8_0),8,512,128,6788.75,6491.16,6859.96,27278.08,10,57.9,85.4

@@ -1,0 +1,6 @@
+test_type,dataset,domain_status,num_windows,full_context_mean_ce,short_context_mean_ce,mean_paired_delta,paired_delta_se,ci_95_low,ci_95_high,threshold,passes_criterion,status
+8k Context-Use (Target Last 1k),PG-19 Val (8k),In-Domain,100,2.4096,2.4508,-0.0412,0.0037,-0.0484,-0.034,+0.02 CE on Upper Bound,True,PASS
+8k Context-Use (Target Last 1k),Wikipedia Long Val (8k),Out-of-Domain for Stage C,100,2.393,2.4126,-0.0196,0.0053,-0.03,-0.0091,+0.02 CE on Upper Bound,True,PASS
+8k Context-Use (Target Last 1k),FineWeb-Edu Long Val (8k),Out-of-Domain for Stage C,100,2.4807,2.5167,-0.0361,0.0047,-0.0452,-0.0269,+0.02 CE on Upper Bound,True,PASS
+32k Context-Use (Target Last 1k vs 8k),PG-19 Val (32k),In-Domain (PG-19 trained in Stages B & C),50,2.3885,2.4058,-0.0173,0.004,-0.0251,-0.0095,+0.02 CE on Upper Bound,True,PASS
+32k Context-Use (Target Last 1k vs 2k),PG-19 Val (32k),In-Domain (PG-19 trained in Stages B & C),50,2.3885,2.4425,-0.0541,0.0062,-0.0661,-0.042,+0.02 CE on Upper Bound,True,PASS

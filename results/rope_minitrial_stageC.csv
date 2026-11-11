@@ -1,0 +1,3 @@
+candidate,rope_theta,tokens_m,active_speed_tok_s,wall_time_min,paused_time_s,pause_events,val_wiki_2k_ce,val_fineweb_2k_ce,val_cosmo_2k_ce,val_tinystories_2k_ce,pg19_0_1k,pg19_1k_2k,pg19_2k_4k,pg19_4k_8k,pg19_8k_16k,pg19_16k_32k,ctx_32k_mean,ctx_32k_se,ctx_8k_mean,ctx_2k_mean,delta_32k_minus_8k,gain_32k_vs_2k
+RoPE_1000k,1000000.0,15.07,23628.2,10.72,5.0,1,2.4303,2.6171,1.8718,1.4489,2.9037,2.7588,2.6334,2.673,2.6301,2.6921,2.4671,0.0922,2.4826,2.5173,-0.0154,0.0501
+RoPE_4000k,4000000.0,15.07,23995.6,12.15,100.5,20,2.4348,2.6205,1.8757,1.4549,2.9007,2.7579,2.625,2.6653,2.6238,2.689,2.4637,0.0924,2.4839,2.5208,-0.0202,0.0571

@@ -1,0 +1,2 @@
+model,rope_theta,pg19_0_1k,pg19_1k_2k,pg19_2k_4k,pg19_4k_8k,pg19_8k_16k,pg19_16k_32k,wiki_0_1k,wiki_1k_2k,wiki_2k_4k,wiki_4k_8k,fineweb_0_1k,fineweb_1k_2k,fineweb_2k_4k,fineweb_4k_8k,passkey_1k_acc,passkey_2k_acc,passkey_4k_acc,passkey_8k_acc,passkey_16k_acc,passkey_32k_acc
+StageA_Undecayed_Baseline,10000.0,3.286,3.1673,4.9192,6.6625,7.5923,8.142,2.6792,2.6829,4.8432,7.3641,2.8999,2.7514,4.5693,7.1048,0.0,0.0,0.0,0.0,0.0,0.0

@@ -1,0 +1,5 @@
+dataset,vocab_8192_ce,vocab_8256_ce,delta_ce,status
+Wikipedia Neutral,2.4466,2.4466,3e-06,PASS (<= 0.01)
+FineWeb-Edu,2.5966,2.5966,5e-06,PASS (<= 0.01)
+Cosmopedia v2,1.8406,1.8406,1e-06,PASS (<= 0.01)
+TinyStories,1.3887,1.3887,0.0,PASS (<= 0.01)

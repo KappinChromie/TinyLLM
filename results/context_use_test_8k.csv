@@ -1,0 +1,7 @@
+model,source,num_windows,target_tokens,loss_floor_1k_mean,loss_floor_1k_se,loss_ctx_512_mean,loss_ctx_512_se,loss_last_2k_mean,loss_last_2k_se,loss_full_8k_mean,loss_full_8k_se,delta_8k_minus_2k,total_gain_vs_floor,extra_gain_vs_2k,gate_criterion_met,gate_status
+StageB_Undecayed_500k,PG-19 Val,100,1024,2.657,0.0574,2.5776,0.0576,2.5608,0.0577,2.5229,0.0573,-0.038,0.1341,0.038,True,PASS
+StageB_Undecayed_500k,Wikipedia Long Val,100,1024,2.5406,0.037,2.4225,0.0382,2.3978,0.0379,2.334,0.0378,-0.0637,0.2066,0.0637,True,PASS
+StageB_Undecayed_500k,FineWeb-Edu Long Val,100,1024,2.6302,0.0361,2.5399,0.0366,2.5202,0.0367,2.4786,0.0363,-0.0416,0.1516,0.0416,True,PASS
+StageA_Undecayed_10k_Base,PG-19 Val,100,1024,3.0369,0.0558,2.9332,0.0582,2.9199,0.0582,6.9553,0.1287,4.0355,-3.9185,-4.0355,False,FAIL
+StageA_Undecayed_10k_Base,Wikipedia Long Val,100,1024,2.8099,0.0371,2.6831,0.0375,2.663,0.0371,7.5958,0.0473,4.9328,-4.786,-4.9328,False,FAIL
+StageA_Undecayed_10k_Base,FineWeb-Edu Long Val,100,1024,2.7357,0.0376,2.6515,0.038,2.6398,0.038,7.6728,0.0418,5.033,-4.9371,-5.033,False,FAIL

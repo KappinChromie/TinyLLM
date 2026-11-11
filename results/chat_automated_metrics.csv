@@ -1,0 +1,3 @@
+model,total_prompts,greedy_end_rate,greedy_end_count,greedy_no_stray_rate,greedy_no_stray_count,greedy_repetition_rate,greedy_repetition_count,format_adherence_rate,format_adherence_count,greedy_mean_len,sample_end_rate,sample_no_stray_rate,sample_repetition_rate,sample_mean_len
+Chat Model (SFT Final),63,76.19047619047619,48/63,100.0,63/63,17.46031746031746,11/63,15.789473684210526,3/19,122.42857142857143,77.77777777777779,100.0,10.582010582010582,131.010582010582
+Stage C Base Model,63,0.0,0/63,100.0,63/63,76.19047619047619,48/63,0.0,0/19,256.0,0.0,100.0,83.5978835978836,256.0

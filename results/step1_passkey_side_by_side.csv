@@ -1,0 +1,17 @@
+model,context_depth,filler_type,trials,cand_21_rank1_acc,vocab_8192_rank1_acc,greedy_acc,mean_vocab_rank,median_vocab_rank
+Stage A Undecayed,2048,prose,20,0.0,0.0,0.0,1934.3,1847.5
+Stage A Undecayed,2048,repetitive,20,0.0,0.0,0.0,1904.1,1802.0
+Stage A Decayed,2048,prose,20,0.0,0.0,0.0,2124.3,1284.0
+Stage A Decayed,2048,repetitive,20,5.0,0.0,0.0,815.0,745.0
+Stage B Undecayed,2048,prose,20,95.0,0.0,0.0,288.2,171.0
+Stage B Undecayed,2048,repetitive,20,60.0,0.0,0.0,360.0,395.0
+Stage B Undecayed,4096,prose,20,95.0,0.0,0.0,409.2,290.5
+Stage B Undecayed,4096,repetitive,20,45.0,0.0,0.0,711.1,686.5
+Stage B Undecayed,8192,prose,20,85.0,0.0,0.0,765.7,581.0
+Stage B Undecayed,8192,repetitive,20,20.0,0.0,0.0,786.8,780.0
+Stage C Decayed,2048,prose,20,100.0,0.0,0.0,275.3,210.0
+Stage C Decayed,2048,repetitive,20,85.0,0.0,0.0,1441.2,1684.5
+Stage C Decayed,4096,prose,20,95.0,0.0,0.0,403.8,286.0
+Stage C Decayed,4096,repetitive,20,55.00000000000001,0.0,0.0,2248.9,2478.5
+Stage C Decayed,8192,prose,20,85.0,0.0,0.0,824.0,708.5
+Stage C Decayed,8192,repetitive,20,55.00000000000001,0.0,0.0,1853.5,1982.0

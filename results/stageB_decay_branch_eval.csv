@@ -1,0 +1,2 @@
+model,tokens_decayed_m,val_wiki_2k_ce,val_fineweb_2k_ce,val_cosmo_2k_ce,val_tinystories_2k_ce,pg19_0_1k,pg19_1k_2k,pg19_2k_4k,pg19_4k_8k,wiki_4k_8k,fineweb_4k_8k,passkey_2k_acc,passkey_4k_acc,passkey_8k_acc
+StageB_Decayed_Fallback_8k,25.17,2.3612,2.5368,1.8481,1.6021,2.8932,2.7555,2.6224,2.6645,2.4642,2.4569,0.0,0.0,0.0

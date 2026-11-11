@@ -1,0 +1,21 @@
+model,trial,filler_len,depth_pct,true_passkey,generated_raw,passkey_in_gen,starts_with_passkey
+StageA_Undecayed,1,1024,10.0,27727,'roughly the\nfirst of the',False,False
+StageA_Undecayed,2,1024,14.2,41367,':\n\n7:17 And',False,False
+StageA_Undecayed,3,1024,18.4,10661,'roughly\nthe same as the re',False,False
+StageA_Undecayed,4,1024,22.6,72711,'',False,False
+StageA_Undecayed,5,1024,26.8,48067,'roughly\nthe same as the g',False,False
+StageA_Undecayed,6,1024,31.1,62290,'roughly\nthe same as the min',False,False
+StageA_Undecayed,7,1024,35.3,41055,"'?\n""I\'m sorry,'",False,False
+StageA_Undecayed,8,1024,39.5,38179,'irrelevant to the',False,False
+StageA_Undecayed,9,1024,43.7,39794,'?',False,False
+StageA_Undecayed,10,1024,47.9,67022,'?\n  SIMPC',False,False
+StageB_Undecayed,1,1024,10.0,27727,'_curiously_',False,False
+StageB_Undecayed,2,1024,14.2,41367,'not ignorant of the',False,False
+StageB_Undecayed,3,1024,18.4,10661,'she who has been brought',False,False
+StageB_Undecayed,4,1024,22.6,72711,'',False,False
+StageB_Undecayed,5,1024,26.8,48067,'_that_\nsaid',False,False
+StageB_Undecayed,6,1024,31.1,62290,'-- a very\ndifferent',False,False
+StageB_Undecayed,7,1024,35.3,41055,"'_a_\ndeadly,'",False,False
+StageB_Undecayed,8,1024,39.5,38179,'_the\ndistinguished',False,False
+StageB_Undecayed,9,1024,43.7,39794,'ANTO',False,False
+StageB_Undecayed,10,1024,47.9,67022,'_thou_.\n  G',False,False
